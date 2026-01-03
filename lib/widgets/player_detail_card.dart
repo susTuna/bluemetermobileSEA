@@ -3,6 +3,7 @@ import 'package:fixnum/fixnum.dart';
 import '../core/models/classes.dart';
 import '../core/models/player_info.dart';
 import '../core/models/dps_data.dart';
+import '../core/data/skill_names.dart';
 
 class PlayerDetailCard extends StatelessWidget {
   final PlayerInfo? playerInfo;
@@ -211,7 +212,7 @@ class PlayerDetailCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      skill.skillId,
+                      getSkillName(int.tryParse(skill.skillId) ?? 0),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 9,
