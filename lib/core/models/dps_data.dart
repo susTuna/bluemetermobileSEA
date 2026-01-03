@@ -1,5 +1,14 @@
 import 'package:fixnum/fixnum.dart';
 
+class SkillData {
+  final String skillId;
+  Int64 totalDamage = Int64.ZERO;
+  Int64 totalHeal = Int64.ZERO;
+  int hitCount = 0;
+
+  SkillData({required this.skillId});
+}
+
 class DpsData {
   Int64 uid;
   int? startLoggedTick;
@@ -12,6 +21,9 @@ class DpsData {
   Int64 totalHeal = Int64.ZERO;
   
   bool isNpcData = false;
+
+  // Skill tracking
+  final Map<String, SkillData> skills = {};
 
   DpsData({required this.uid});
 

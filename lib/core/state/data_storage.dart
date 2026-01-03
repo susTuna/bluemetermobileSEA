@@ -83,10 +83,13 @@ class DataStorage extends ChangeNotifier {
   Map<Int64, DpsData> get fullDpsDatas {
     final filtered = <Int64, DpsData>{};
     _fullDpsDatas.forEach((key, value) {
-      if (_playerInfoDatas.containsKey(key)) {
+      // Always include current player, even if info not loaded yet
+      if (key == _currentPlayerUuid) {
+        filtered[key] = value;
+      } else if (_playerInfoDatas.containsKey(key)) {
         final info = _playerInfoDatas[key];
-        // Only include if it's the current player or has a valid profession ID (monsters usually don't)
-        if (key == _currentPlayerUuid || (info != null && info.professionId != null && info.professionId != 0)) {
+        // Only include if has a valid profession ID (monsters usually don't)
+        if (info != null && info.professionId != null && info.professionId != 0) {
           filtered[key] = value;
         }
       }
@@ -159,8 +162,13 @@ class DataStorage extends ChangeNotifier {
     return _fullDpsDatas[uid]!;
   }
 
-  void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick) {
+  DpsData? getDpsData(Int64 uid) {
+    return _fullDpsDatas[uid];
+  }
+
+  void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick, {String? skillId}) {
     _onAction();
+    debugPrint("[BM] addDamage - Attacker: $attackerUid, Target: $targetUid, Damage: $damage, CurrentPlayer: $_currentPlayerUuid");
     // 1. Add Damage Dealt to Attacker
     var attackerData = getOrCreateDpsData(attackerUid);
     attackerData.startLoggedTick ??= tick;
@@ -168,6 +176,13 @@ class DataStorage extends ChangeNotifier {
     attackerData.totalAttackDamage += damage;
     if (attackerData.startLoggedTick != null) {
        attackerData.activeCombatTicks = tick - attackerData.startLoggedTick!;
+    }
+
+    // Track skill data
+    if (skillId != null && skillId.isNotEmpty) {
+      var skill = attackerData.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
+      skill.totalDamage += damage;
+      skill.hitCount++;
     }
 
     // 2. Add Damage Taken to Target
@@ -182,8 +197,9 @@ class DataStorage extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addHealing(Int64 healerUid, Int64 targetUid, Int64 healAmount, int tick) {
+  void addHealing(Int64 healerUid, Int64 targetUid, Int64 healAmount, int tick, {String? skillId}) {
     _onAction();
+    debugPrint("[BM] addHealing - Healer: $healerUid, Target: $targetUid, Heal: $healAmount, CurrentPlayer: $_currentPlayerUuid");
     // 1. Add Heal Output to Healer
     var healerData = getOrCreateDpsData(healerUid);
     healerData.startLoggedTick ??= tick;
@@ -191,6 +207,13 @@ class DataStorage extends ChangeNotifier {
     healerData.totalHeal += healAmount;
     if (healerData.startLoggedTick != null) {
        healerData.activeCombatTicks = tick - healerData.startLoggedTick!;
+    }
+
+    // Track skill data
+    if (skillId != null && skillId.isNotEmpty) {
+      var skill = healerData.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
+      skill.totalHeal += healAmount;
+      skill.hitCount++;
     }
     
     notifyListeners();

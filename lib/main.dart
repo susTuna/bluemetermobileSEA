@@ -10,7 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/analyze/packet_analyzer_v2.dart';
 import 'core/state/data_storage.dart';
 import 'core/models/classes.dart';
+import 'core/models/dps_data.dart';
+import 'core/models/player_info.dart';
 import 'core/services/translation_service.dart';
+import 'widgets/player_detail_card.dart';
 
 void main() {
   runApp(const MyApp());
@@ -36,6 +39,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
   late TabController _tabController;
   List<Map<String, dynamic>> _players = [];
   int _combatTime = 0;
+  String? _selectedPlayerUid; // UID du joueur sélectionné pour la carte de détails
 
   // Track window position
   double _windowX = 0;
@@ -78,6 +82,12 @@ class _OverlayWidgetState extends State<OverlayWidget>
           if (event.containsKey('combatTime')) {
             _combatTime = event['combatTime'] as int;
           }
+          // Update selectedPlayerUid when it's explicitly sent
+          if (event.containsKey('selectedPlayerUid')) {
+            final newUid = event['selectedPlayerUid'] as String?;
+            debugPrint("[BM] Overlay received selectedPlayerUid: $newUid");
+            _selectedPlayerUid = newUid;
+          }
         });
       }
     });
@@ -118,6 +128,12 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
   @override
   Widget build(BuildContext context) {
+    // Si un joueur est sélectionné, afficher la carte de détails
+    if (_selectedPlayerUid != null) {
+      return _buildPlayerDetail();
+    }
+    
+    // Sinon afficher la liste normale
     if (_isMinimized) {
       return _buildMinimized();
     }
@@ -484,6 +500,69 @@ class _OverlayWidgetState extends State<OverlayWidget>
     final int s = seconds % 60;
     return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
+
+  Widget _buildPlayerDetail() {
+    if (_selectedPlayerUid == null) return const SizedBox.shrink();
+
+    final playerData = _players.firstWhere(
+      (p) => p['uid'] == _selectedPlayerUid,
+      orElse: () => {},
+    );
+
+    if (playerData.isEmpty) return const SizedBox.shrink();
+
+    final uid = Int64.parseInt(_selectedPlayerUid!);
+    
+    // Use the already calculated DPS/HPS values from playerData
+    final dpsValue = (playerData['dps'] as num?)?.toDouble() ?? 0.0;
+    final hpsValue = (playerData['hps'] as num?)?.toDouble() ?? 0.0;
+    final takenDpsValue = (playerData['takenDps'] as num?)?.toDouble() ?? 0.0;
+    
+    final dpsData = DpsData(uid: uid)
+      ..totalAttackDamage = Int64(playerData['total'] ?? 0)
+      ..totalHeal = Int64(playerData['totalHeal'] ?? 0)
+      ..totalTakenDamage = Int64(playerData['totalTaken'] ?? 0);
+
+    final skillsList = playerData['skills'] as List<dynamic>? ?? [];
+    for (var skillMap in skillsList) {
+      final skillData = SkillData(skillId: skillMap['skillId'])
+        ..totalDamage = Int64(skillMap['totalDamage'] ?? 0)
+        ..totalHeal = Int64(skillMap['totalHeal'] ?? 0)
+        ..hitCount = skillMap['hitCount'] ?? 0;
+      dpsData.skills[skillData.skillId] = skillData;
+    }
+
+    final playerInfo = PlayerInfo(
+      uid: uid,
+      name: playerData['name'],
+      professionId: playerData['classId'],
+      level: playerData['level'],
+      combatPower: playerData['combatPower'],
+      rankLevel: playerData['rankLevel'],
+      critical: playerData['critical'],
+      lucky: playerData['lucky'],
+      maxHp: Int64(playerData['maxHp'] ?? 0),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: _windowDecoration,
+        child: PlayerDetailCard(
+          playerInfo: playerInfo,
+          dpsData: dpsData,
+          dpsValue: dpsValue,
+          hpsValue: hpsValue,
+          takenDpsValue: takenDpsValue,
+          onClose: () {
+            setState(() {
+              _selectedPlayerUid = null;
+            });
+          },
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -523,6 +602,7 @@ class _HomePageState extends State<HomePage> {
   late PacketAnalyzerV2 _packetAnalyzer;
   Timer? _overlayUpdateTimer;
   ReceivePort? _receivePort;
+  String? _selectedPlayerUid; // UID du joueur sélectionné pour affichage de la carte
 
   @override
   void initState() {
@@ -534,8 +614,21 @@ class _HomePageState extends State<HomePage> {
     IsolateNameServer.removePortNameMapping('overlay_communication_port'); // Clean up old mapping if any
     IsolateNameServer.registerPortWithName(_receivePort!.sendPort, 'overlay_communication_port');
     _receivePort!.listen((message) {
+      debugPrint("[BM] HomePage received message: $message");
       if (message == "RESET") {
         DataStorage().reset();
+        setState(() {
+          _selectedPlayerUid = null;
+        });
+        _updateOverlay(); // Send update without selectedPlayerUid
+      } else if (message is Map && message.containsKey('selectPlayer')) {
+        final newUid = message['selectPlayer'] as String?;
+        debugPrint("[BM] HomePage setting selectedPlayerUid to: $newUid");
+        setState(() {
+          _selectedPlayerUid = newUid;
+        });
+        // Send selected player to overlay immediately
+        _updateOverlayWithSelection();
       }
     });
 
@@ -559,16 +652,27 @@ class _HomePageState extends State<HomePage> {
     final storage = DataStorage();
     storage.checkTimeout();
 
+    debugPrint("[BM] UpdateOverlay - CurrentPlayerUUID: ${storage.currentPlayerUuid}");
+    debugPrint("[BM] UpdateOverlay - fullDpsDatas count: ${storage.fullDpsDatas.length}");
+
     final playersFutures = storage.fullDpsDatas.entries
     .where((e) => e.value.totalAttackDamage > Int64.ZERO || e.value.totalHeal > Int64.ZERO || e.value.totalTakenDamage > Int64.ZERO)
     .map((e) async {
       final uid = e.key;
       final dpsData = e.value;
       final info = await storage.getPlayerInfo(uid);
-      // if (uid == storage.currentPlayerUuid) {
-      //    debugPrint("[BM Main] Sending Overlay Update for Me ($uid): Name=${info?.name}, DPS=${dpsData.simpleDps}");
-      // }
+      debugPrint("[BM] UpdateOverlay - Processing UID: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.name}");
+      
+      // Convert skills to serializable format
+      final skillsList = dpsData.skills.entries.map((skillEntry) => {
+        'skillId': skillEntry.key,
+        'totalDamage': skillEntry.value.totalDamage.toInt(),
+        'totalHeal': skillEntry.value.totalHeal.toInt(),
+        'hitCount': skillEntry.value.hitCount,
+      }).toList();
+      
       return {
+        'uid': uid.toString(), // Add UID as string for serialization
         'name': info?.name ?? "Unknown",
         'isMe': uid == storage.currentPlayerUuid,
         'classId': info?.professionId ?? 0,
@@ -579,19 +683,80 @@ class _HomePageState extends State<HomePage> {
         'takenDps': dpsData.simpleTakenDps,
         'totalTaken': dpsData.totalTakenDamage.toInt(),
         'level': info?.level ?? 0,
+        'combatPower': info?.combatPower ?? 0,
+        'rankLevel': info?.rankLevel ?? 0,
+        'critical': info?.critical ?? 0,
+        'lucky': info?.lucky ?? 0,
+        'maxHp': info?.maxHp?.toInt() ?? 0,
+        'skills': skillsList,
       };
     });
 
     final players = await Future.wait(playersFutures);
     final combatDuration = storage.currentCombatDuration;
 
-    // Sort by DPS by default, but we send all data so the overlay can sort based on tab
-    // Actually, sorting logic should probably be in the overlay if it changes per tab.
-    // But here we just send the list.
+    // Debug: Log first player to check UID transmission
+    if (players.isNotEmpty) {
+      debugPrint("[BM] First player data: ${players.first}");
+      debugPrint("[BM] Current player UUID: ${storage.currentPlayerUuid}");
+    }
     
+    // Don't send selectedPlayerUid in regular updates to avoid overwriting close action
     FlutterOverlayWindow.shareData({
       'players': players,
       'combatTime': combatDuration.inSeconds,
+    });
+  }
+
+  Future<void> _updateOverlayWithSelection() async {
+    final storage = DataStorage();
+    storage.checkTimeout();
+
+    final playersFutures = storage.fullDpsDatas.entries
+    .where((e) => e.value.totalAttackDamage > Int64.ZERO || e.value.totalHeal > Int64.ZERO || e.value.totalTakenDamage > Int64.ZERO)
+    .map((e) async {
+      final uid = e.key;
+      final dpsData = e.value;
+      final info = await storage.getPlayerInfo(uid);
+      
+      // Convert skills to serializable format
+      final skillsList = dpsData.skills.entries.map((skillEntry) => {
+        'skillId': skillEntry.key,
+        'totalDamage': skillEntry.value.totalDamage.toInt(),
+        'totalHeal': skillEntry.value.totalHeal.toInt(),
+        'hitCount': skillEntry.value.hitCount,
+      }).toList();
+      
+      return {
+        'uid': uid.toString(),
+        'name': info?.name ?? "Unknown",
+        'isMe': uid == storage.currentPlayerUuid,
+        'classId': info?.professionId ?? 0,
+        'dps': dpsData.simpleDps,
+        'total': dpsData.totalAttackDamage.toInt(),
+        'hps': dpsData.simpleHps,
+        'totalHeal': dpsData.totalHeal.toInt(),
+        'takenDps': dpsData.simpleTakenDps,
+        'totalTaken': dpsData.totalTakenDamage.toInt(),
+        'level': info?.level ?? 0,
+        'combatPower': info?.combatPower ?? 0,
+        'rankLevel': info?.rankLevel ?? 0,
+        'critical': info?.critical ?? 0,
+        'lucky': info?.lucky ?? 0,
+        'maxHp': info?.maxHp?.toInt() ?? 0,
+        'skills': skillsList,
+      };
+    });
+
+    final players = await Future.wait(playersFutures);
+    final combatDuration = storage.currentCombatDuration;
+    
+    // Send with selectedPlayerUid
+    debugPrint("[BM] Sending selectedPlayerUid to overlay: $_selectedPlayerUid");
+    FlutterOverlayWindow.shareData({
+      'players': players,
+      'combatTime': combatDuration.inSeconds,
+      'selectedPlayerUid': _selectedPlayerUid,
     });
   }
 
@@ -837,66 +1002,84 @@ class _PlayerListState extends State<PlayerList> {
       name = "Moi";
     }
 
-    return Container(
-      height: 18,
-      padding: const EdgeInsets.only(bottom: 1),
-      child: Stack(
-        children: [
-          FractionallySizedBox(
-            widthFactor: percent,
-            child: Container(
-              color: _getClassColor(cls).withValues(alpha: 0.3),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        debugPrint("[BM] Row tapped - Full player data: $p");
+        final uidStr = p['uid'] as String?;
+        debugPrint("[BM] Row tapped - uid: $uidStr, name: $name");
+        if (uidStr != null && uidStr.isNotEmpty) {
+          // Envoyer un message au processus principal pour sélectionner ce joueur
+          final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
+          if (sendPort != null) {
+            sendPort.send({'selectPlayer': uidStr});
+            debugPrint("[BM] Sent selectPlayer message: $uidStr");
+          } else {
+            debugPrint("[BM] Could not find communication port");
+          }
+        }
+      },
+      child: Container(
+        height: 18,
+        padding: const EdgeInsets.only(bottom: 1),
+        child: Stack(
+          children: [
+            FractionallySizedBox(
+              widthFactor: percent,
+              child: Container(
+                color: _getClassColor(cls).withValues(alpha: 0.3),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: [
-                Container(width: 2, color: _getClassColor(cls)),
-                const SizedBox(width: 4),
-                Text(
-                  "${index + 1}.",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 11,
-                    shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                if (cls != Classes.unknown) ...[
-                  Image.asset(
-                    cls.iconPath,
-                    width: 12,
-                    height: 12,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                  ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  Container(width: 2, color: _getClassColor(cls)),
                   const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: Text(
-                    name,
+                  Text(
+                    "${index + 1}.",
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
                       fontSize: 11,
                       shadows: [Shadow(blurRadius: 2, color: Colors.black)],
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                Text(
-                  "${_formatNumber(val)} / ${_formatNumber(total)}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    shadows: [Shadow(blurRadius: 2, color: Colors.black)],
+                  const SizedBox(width: 4),
+                  if (cls != Classes.unknown) ...[
+                    Image.asset(
+                      cls.iconPath,
+                      width: 12,
+                      height: 12,
+                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
+                        shadows: [Shadow(blurRadius: 2, color: Colors.black)],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-              ],
+                  Text(
+                    "${_formatNumber(val)} / ${_formatNumber(total)}",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      shadows: [Shadow(blurRadius: 2, color: Colors.black)],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

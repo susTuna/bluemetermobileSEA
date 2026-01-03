@@ -128,14 +128,26 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           if (d.type == EDamageType.heal) {
              // Handle Healing
              if (isAttackerPlayer) {
-               _storage.addHealing(attackerUuid, targetUuid, damageValue, DateTime.now().millisecondsSinceEpoch);
+               _storage.addHealing(
+                 attackerUuid, 
+                 targetUuid, 
+                 damageValue, 
+                 DateTime.now().millisecondsSinceEpoch,
+                 skillId: d.ownerId.toString(),
+               );
              }
           } else {
              // Handle Damage
              
              if (d.type == EDamageType.normal || d.type == EDamageType.miss) { 
                 if (isAttackerPlayer || isTargetPlayer) {
-                  _storage.addDamage(attackerUuid, targetUuid, damageValue, DateTime.now().millisecondsSinceEpoch);
+                  _storage.addDamage(
+                    attackerUuid, 
+                    targetUuid, 
+                    damageValue, 
+                    DateTime.now().millisecondsSinceEpoch,
+                    skillId: d.ownerId.toString(),
+                  );
                 }
              }
           }
@@ -155,17 +167,15 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
       
       if (msg.hasDeltaInfo()) {
         final deltaInfo = msg.deltaInfo;
-        final uuid = deltaInfo.uuid;
+        final uuidRaw = deltaInfo.uuid;
         
-        // Update CurrentPlayerUUID if it's the first time or changed
-        // Note: SyncToMeDeltaInfo.uuid is the raw UUID (shifted left 16 bits + type)
-        // We need to shift it right to get the actual player UID.
-        
-        final playerUid = uuid >> 16;
+        // Shift the UUID to get the player UID (consistent with other processors)
+        final playerUid = uuidRaw >> 16;
         
         if (playerUid != Int64.ZERO && _storage.currentPlayerUuid != playerUid) {
           _storage.currentPlayerUuid = playerUid;
           _storage.ensurePlayer(playerUid);
+          debugPrint("[BM] SyncToMeDeltaInfo - Set currentPlayerUuid to: $playerUid (from raw: $uuidRaw)");
         }
 
         if (deltaInfo.hasBaseDelta()) {
