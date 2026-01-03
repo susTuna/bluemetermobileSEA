@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fixnum/fixnum.dart';
 import '../core/models/classes.dart';
 import '../core/models/player_info.dart';
 import '../core/models/dps_data.dart';
@@ -31,91 +30,63 @@ class PlayerDetailCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header compact
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            // Header
+            _buildHeader(name, cls),
+            
+            const Divider(height: 1, color: Colors.white10),
+
+            // Player Stats (Level, CP, etc.)
+            if (playerInfo != null) _buildPlayerStats(playerInfo!),
+
+            // Combat Stats (DPS, HPS, Taken)
+            _buildCombatStats(),
+
+            const Divider(height: 1, color: Colors.white10),
+
+            // Skills Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Row(
-                children: [
-                  if (cls != Classes.unknown) ...[
-                    Image.asset(
-                      cls.iconPath,
-                      width: 20,
-                      height: 20,
-                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: TextStyle(
-                            color: _getClassColor(cls),
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (cls != Classes.unknown)
-                          Text(
-                            cls.name,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                            ),
-                          ),
-                      ],
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Text(
+                    "COMPÉTENCES",
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: onClose,
-                    child: const Icon(Icons.close, color: Colors.white70, size: 18),
+                  Text(
+                    "DÉTAILS",
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
 
-            // Stats compacts en colonnes
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatColumn("DPS", dpsValue, dpsData.totalAttackDamage.toInt(), Colors.red),
-                  Container(width: 1, height: 30, color: Colors.white10),
-                  _buildStatColumn("HPS", hpsValue, dpsData.totalHeal.toInt(), Colors.green),
-                  Container(width: 1, height: 30, color: Colors.white10),
-                  _buildStatColumn("Reçu", takenDpsValue, dpsData.totalTakenDamage.toInt(), Colors.orange),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-
-            // Skills Section
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                "Compétences",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-
+            // Skills List
             Expanded(
               child: _buildSkillsList(),
             ),
@@ -125,36 +96,194 @@ class PlayerDetailCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatColumn(String label, double rate, int total, Color color) {
-    return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildHeader(String name, Classes cls) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
+          if (cls != Classes.unknown) ...[
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Image.asset(
+                cls.iconPath,
+                width: 24,
+                height: 24,
+                errorBuilder: (context, error, stackTrace) => const Icon(Icons.help, color: Colors.white24, size: 24),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: _getClassColor(cls),
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (cls != Classes.unknown)
+                  Text(
+                    cls.name,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            "${_formatNumber(rate)}/s",
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            _formatNumber(total),
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 8,
-            ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+            onPressed: onClose,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            splashRadius: 20,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerStats(PlayerInfo info) {
+    final stats = <Widget>[];
+    
+    if (info.level != null && info.level! > 0) {
+      stats.add(_buildStatBadge("Lv.${info.level}", Colors.blueGrey));
+    }
+    if (info.combatPower != null && info.combatPower! > 0) {
+      stats.add(_buildStatBadge("CP: ${_formatNumber(info.combatPower!)}", Colors.amber));
+    }
+    if (info.critical != null && info.critical! > 0) {
+      stats.add(_buildStatBadge("Crit: ${info.critical}", Colors.redAccent));
+    }
+    if (info.lucky != null && info.lucky! > 0) {
+      stats.add(_buildStatBadge("Luck: ${info.lucky}", Colors.greenAccent));
+    }
+
+    if (stats.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: Colors.black12,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: stats,
+      ),
+    );
+  }
+
+  Widget _buildStatBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCombatStats() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          _buildStatBox(
+            label: "DPS",
+            value: dpsValue,
+            total: dpsData.totalAttackDamage.toInt(),
+            color: Colors.redAccent,
+            icon: Icons.bolt,
+          ),
+          const SizedBox(width: 8),
+          _buildStatBox(
+            label: "HPS",
+            value: hpsValue,
+            total: dpsData.totalHeal.toInt(),
+            color: Colors.greenAccent,
+            icon: Icons.favorite,
+          ),
+          const SizedBox(width: 8),
+          _buildStatBox(
+            label: "Reçu",
+            value: takenDpsValue,
+            total: dpsData.totalTakenDamage.toInt(),
+            color: Colors.orangeAccent,
+            icon: Icons.shield,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatBox({
+    required String label,
+    required double value,
+    required int total,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 12, color: color),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatNumber(value),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              "Tot: ${_formatNumber(total)}",
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 9,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -163,13 +292,12 @@ class PlayerDetailCard extends StatelessWidget {
     if (dpsData.skills.isEmpty) {
       return const Center(
         child: Text(
-          "Aucune compétence enregistrée",
-          style: TextStyle(color: Colors.white54, fontSize: 11),
+          "Aucune donnée de compétence",
+          style: TextStyle(color: Colors.white24, fontSize: 12),
         ),
       );
     }
 
-    // Sort skills by total damage + heal
     final sortedSkills = dpsData.skills.values.toList()
       ..sort((a, b) {
         final totalA = a.totalDamage.toInt() + a.totalHeal.toInt();
@@ -182,7 +310,13 @@ class PlayerDetailCard extends StatelessWidget {
       (sum, skill) => sum + skill.totalDamage.toInt() + skill.totalHeal.toInt(),
     );
 
+    // Find max value for bar scaling
+    final maxSkillTotal = sortedSkills.isNotEmpty 
+        ? (sortedSkills.first.totalDamage.toInt() + sortedSkills.first.totalHeal.toInt()) 
+        : 1;
+
     return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       itemCount: sortedSkills.length,
       itemBuilder: (context, index) {
         final skill = sortedSkills[index];
@@ -190,83 +324,82 @@ class PlayerDetailCard extends StatelessWidget {
         final percentage = totalDamageAndHeal > 0 
             ? (skillTotal / totalDamageAndHeal * 100) 
             : 0.0;
+        
+        // Bar width relative to the highest skill
+        final barWidthFactor = maxSkillTotal > 0 ? (skillTotal / maxSkillTotal) : 0.0;
+
+        final isHeal = skill.totalHeal > skill.totalDamage;
+        final color = isHeal ? Colors.greenAccent : Colors.redAccent;
+        final avg = skill.hitCount > 0 ? skillTotal / skill.hitCount : 0;
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 3),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(3),
-            border: Border(
-              left: BorderSide(
-                color: skill.totalDamage > Int64.ZERO ? Colors.red : Colors.green,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          margin: const EdgeInsets.only(bottom: 2),
+          height: 30,
+          child: Stack(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      getSkillName(int.tryParse(skill.skillId) ?? 0),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              // Background Bar
+              FractionallySizedBox(
+                widthFactor: barWidthFactor,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                  Text(
-                    "${percentage.toStringAsFixed(1)}%",
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 8,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (skill.totalDamage > Int64.ZERO)
-                    Text(
-                      "Dmg: ${_formatNumber(skill.totalDamage.toInt())}",
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 8,
-                      ),
-                    ),
-                  if (skill.totalHeal > Int64.ZERO)
-                    Text(
-                      "Heal: ${_formatNumber(skill.totalHeal.toInt())}",
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontSize: 8,
-                      ),
-                    ),
-                  Text(
-                    "${skill.hitCount}x",
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 8,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              LinearProgressIndicator(
-                value: percentage / 100,
-                backgroundColor: Colors.white10,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  skill.totalDamage > Int64.ZERO ? Colors.red : Colors.green,
                 ),
-                minHeight: 1.5,
+              ),
+              // Content
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    // Skill Name
+                    Expanded(
+                      child: Text(
+                        getSkillName(int.tryParse(skill.skillId) ?? 0),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // Stats
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              _formatNumber(skillTotal),
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "(${percentage.toStringAsFixed(1)}%)",
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          "${skill.hitCount} hits • Avg: ${_formatNumber(avg)}",
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -278,11 +411,11 @@ class PlayerDetailCard extends StatelessWidget {
   Color _getClassColor(Classes cls) {
     switch (cls.role) {
       case Role.tank:
-        return Colors.blue;
+        return Colors.blueAccent;
       case Role.heal:
-        return Colors.green;
+        return Colors.greenAccent;
       case Role.dps:
-        return Colors.red;
+        return Colors.redAccent;
       default:
         return Colors.grey;
     }
