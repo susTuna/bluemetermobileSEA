@@ -45,6 +45,10 @@ class _OverlayWidgetState extends State<OverlayWidget>
   double _windowX = 0;
   double _windowY = 0;
   
+  // Store original window size before showing detail
+  double _savedWidth = 600;
+  double _savedHeight = 400;
+  
   // Persistent positions
   double _fullX = 0;
   double _fullY = 100;
@@ -86,6 +90,12 @@ class _OverlayWidgetState extends State<OverlayWidget>
           if (event.containsKey('selectedPlayerUid')) {
             final newUid = event['selectedPlayerUid'] as String?;
             debugPrint("[BM] Overlay received selectedPlayerUid: $newUid");
+            
+            // If switching to detail view, save current window size
+            if (newUid != null && _selectedPlayerUid == null) {
+              _saveCurrentWindowSize();
+            }
+            
             _selectedPlayerUid = newUid;
           }
         });
@@ -120,6 +130,35 @@ class _OverlayWidgetState extends State<OverlayWidget>
     await prefs.setBool('overlay_minimized', _isMinimized);
   }
 
+  void _saveCurrentWindowSize() {
+    // Save current window size from _restoredWidth and _restoredHeight
+    _savedWidth = _restoredWidth;
+    _savedHeight = _restoredHeight;
+    debugPrint("[BM] Saved window size: ${_savedWidth}x${_savedHeight}");
+  }
+
+  Future<void> _resizeForDetail() async {
+    try {
+      await FlutterOverlayWindow.resizeOverlay(300, 300, false);
+      debugPrint("[BM] Resized to detail view: 300x300");
+    } catch (e) {
+      debugPrint("[BM] Error resizing for detail: $e");
+    }
+  }
+
+  Future<void> _restoreOriginalSize() async {
+    try {
+      await FlutterOverlayWindow.resizeOverlay(
+        _savedWidth.toInt(),
+        _savedHeight.toInt(),
+        false,
+      );
+      debugPrint("[BM] Restored window size: ${_savedWidth}x${_savedHeight}");
+    } catch (e) {
+      debugPrint("[BM] Error restoring window size: $e");
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -130,6 +169,10 @@ class _OverlayWidgetState extends State<OverlayWidget>
   Widget build(BuildContext context) {
     // Si un joueur est sélectionné, afficher la carte de détails
     if (_selectedPlayerUid != null) {
+      // Resize window for detail view
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _resizeForDetail();
+      });
       return _buildPlayerDetail();
     }
     
@@ -546,19 +589,58 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
     return Material(
       color: Colors.transparent,
-      child: Container(
-        decoration: _windowDecoration,
-        child: PlayerDetailCard(
-          playerInfo: playerInfo,
-          dpsData: dpsData,
-          dpsValue: dpsValue,
-          hpsValue: hpsValue,
-          takenDpsValue: takenDpsValue,
-          onClose: () {
-            setState(() {
-              _selectedPlayerUid = null;
-            });
-          },
+      child: GestureDetector(
+        onPanStart: (details) async {
+          _isDragging = false;
+          try {
+            final pos = await FlutterOverlayWindow.getOverlayPosition();
+            _windowX = pos.x;
+            _windowY = pos.y;
+            _lastMoveX = details.globalPosition.dx;
+            _lastMoveY = details.globalPosition.dy;
+            _windowDeltaX = 0;
+            _windowDeltaY = 0;
+            _isDragging = true;
+          } catch (e) {
+            debugPrint("Error getting overlay position: $e");
+          }
+        },
+        onPanUpdate: (details) {
+          if (!_isDragging) return;
+          final dpr = MediaQuery.of(context).devicePixelRatio;
+          
+          _windowDeltaX = details.globalPosition.dx - _lastMoveX;
+          _windowDeltaY = details.globalPosition.dy - _lastMoveY;
+          
+          _windowX += _windowDeltaX / dpr;
+          _windowY += _windowDeltaY / dpr;
+          _lastMoveX = details.globalPosition.dx;
+          _lastMoveY = details.globalPosition.dy;
+          
+          FlutterOverlayWindow.moveOverlay(
+            OverlayPosition(_windowX, _windowY),
+          );
+        },
+        onPanEnd: (details) {
+          _isDragging = false;
+          _savePosition();
+        },
+        child: Container(
+          decoration: _windowDecoration,
+          child: PlayerDetailCard(
+            playerInfo: playerInfo,
+            dpsData: dpsData,
+            dpsValue: dpsValue,
+            hpsValue: hpsValue,
+            takenDpsValue: takenDpsValue,
+            onClose: () async {
+              // Restore original window size before closing detail
+              await _restoreOriginalSize();
+              setState(() {
+                _selectedPlayerUid = null;
+              });
+            },
+          ),
         ),
       ),
     );
