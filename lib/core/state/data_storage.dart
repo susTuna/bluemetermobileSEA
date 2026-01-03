@@ -84,7 +84,11 @@ class DataStorage extends ChangeNotifier {
     final filtered = <Int64, DpsData>{};
     _fullDpsDatas.forEach((key, value) {
       if (_playerInfoDatas.containsKey(key)) {
-        filtered[key] = value;
+        final info = _playerInfoDatas[key];
+        // Only include if it's the current player or has a valid profession ID (monsters usually don't)
+        if (key == _currentPlayerUuid || (info != null && info.professionId != null && info.professionId != 0)) {
+          filtered[key] = value;
+        }
       }
     });
     return Map.unmodifiable(filtered);
