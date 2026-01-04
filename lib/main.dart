@@ -12,6 +12,7 @@ import 'core/state/data_storage.dart';
 import 'core/models/classes.dart';
 import 'core/models/dps_data.dart';
 import 'core/models/player_info.dart';
+import 'core/services/logger_service.dart';
 import 'core/services/translation_service.dart';
 import 'widgets/player_detail_card.dart';
 
@@ -36,6 +37,7 @@ class OverlayWidget extends StatefulWidget {
 
 class _OverlayWidgetState extends State<OverlayWidget>
     with SingleTickerProviderStateMixin {
+  final LoggerService _logger = LoggerService();
   late TabController _tabController;
   List<Map<String, dynamic>> _players = [];
   int _combatTime = 0;
@@ -89,7 +91,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
           // Update selectedPlayerUid when it's explicitly sent
           if (event.containsKey('selectedPlayerUid')) {
             final newUid = event['selectedPlayerUid'] as String?;
-            debugPrint("[BM] Overlay received selectedPlayerUid: $newUid");
+            _logger.log("Overlay received selectedPlayerUid: $newUid");
             
             // If switching to detail view, save current window size
             if (newUid != null && _selectedPlayerUid == null) {
@@ -134,7 +136,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
     // Save current window size from _restoredWidth and _restoredHeight
     _savedWidth = _restoredWidth;
     _savedHeight = _restoredHeight;
-    debugPrint("[BM] Saved window size: $_savedWidth" "x" "$_savedHeight");
+    _logger.log("Saved window size: $_savedWidth" "x" "$_savedHeight");
   }
 
   Future<void> _resizeForDetail() async {
@@ -153,9 +155,9 @@ class _OverlayWidgetState extends State<OverlayWidget>
         _savedHeight.toInt(),
         false,
       );
-      debugPrint("[BM] Restored window size: $_savedWidth" "x" "$_savedHeight");
+      _logger.log("Restored window size: $_savedWidth" "x" "$_savedHeight");
     } catch (e) {
-      debugPrint("[BM] Error restoring window size: $e");
+      _logger.error("Error restoring window size", error: e);
     }
   }
 
@@ -644,7 +646,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
               _windowDeltaY = 0;
               _isDragging = true;
             } catch (e) {
-              debugPrint("Error getting overlay position: $e");
+              _logger.error("Error getting overlay position", error: e);
             }
           },
           onDragUpdate: (details) {
@@ -705,6 +707,8 @@ class _HomePageState extends State<HomePage> {
     'com.bluemeter.mobile/packet_stream',
   );
 
+  final LoggerService _logger = LoggerService();
+
   bool _isVpnRunning = false;
   StreamSubscription? _packetSubscription;
   late PacketAnalyzerV2 _packetAnalyzer;
@@ -722,7 +726,7 @@ class _HomePageState extends State<HomePage> {
     IsolateNameServer.removePortNameMapping('overlay_communication_port'); // Clean up old mapping if any
     IsolateNameServer.registerPortWithName(_receivePort!.sendPort, 'overlay_communication_port');
     _receivePort!.listen((message) {
-      debugPrint("[BM] HomePage received message: $message");
+      _logger.log("HomePage received message: $message");
       if (message == "RESET") {
         DataStorage().reset();
         setState(() {
@@ -731,7 +735,7 @@ class _HomePageState extends State<HomePage> {
         _updateOverlay(); // Send update without selectedPlayerUid
       } else if (message is Map && message.containsKey('selectPlayer')) {
         final newUid = message['selectPlayer'] as String?;
-        debugPrint("[BM] HomePage setting selectedPlayerUid to: $newUid");
+        _logger.log("HomePage setting selectedPlayerUid to: $newUid");
         setState(() {
           _selectedPlayerUid = newUid;
         });
@@ -760,16 +764,17 @@ class _HomePageState extends State<HomePage> {
     final storage = DataStorage();
     storage.checkTimeout();
 
-    debugPrint("[BM] UpdateOverlay - CurrentPlayerUUID: ${storage.currentPlayerUuid}");
-    debugPrint("[BM] UpdateOverlay - fullDpsDatas count: ${storage.fullDpsDatas.length}");
+    // _logger.log("UpdateOverlay - CurrentPlayerUUID: ${storage.currentPlayerUuid}");
+    // _logger.log("UpdateOverlay - fullDpsDatas count: ${storage.fullDpsDatas.length}");
 
-    final playersFutures = storage.fullDpsDatas.entries
+    final players = storage.fullDpsDatas.entries
     .where((e) => e.value.totalAttackDamage > Int64.ZERO || e.value.totalHeal > Int64.ZERO || e.value.totalTakenDamage > Int64.ZERO)
-    .map((e) async {
+    .map((e) {
       final uid = e.key;
       final dpsData = e.value;
-      final info = await storage.getPlayerInfo(uid);
-      debugPrint("[BM] UpdateOverlay - Processing UID: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.name}");
+      // Use synchronous getter to avoid await overhead
+      final info = storage.getPlayerInfoSync(uid);
+      // _logger.log("UpdateOverlay - Processing UID: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.name}");
       
       // Convert skills to serializable format
       final skillsList = dpsData.skills.entries.map((skillEntry) => {
@@ -816,15 +821,14 @@ class _HomePageState extends State<HomePage> {
         'skills': skillsList,
         'timeline': timelineMap,
       };
-    });
+    }).toList();
 
-    final players = await Future.wait(playersFutures);
     final combatDuration = storage.currentCombatDuration;
 
     // Debug: Log first player to check UID transmission
     if (players.isNotEmpty) {
-      debugPrint("[BM] First player data: ${players.first}");
-      debugPrint("[BM] Current player UUID: ${storage.currentPlayerUuid}");
+      // _logger.log("First player data: ${players.first}");
+      // _logger.log("Current player UUID: ${storage.currentPlayerUuid}");
     }
     
     // Don't send selectedPlayerUid in regular updates to avoid overwriting close action
@@ -838,12 +842,12 @@ class _HomePageState extends State<HomePage> {
     final storage = DataStorage();
     storage.checkTimeout();
 
-    final playersFutures = storage.fullDpsDatas.entries
+    final players = storage.fullDpsDatas.entries
     .where((e) => e.value.totalAttackDamage > Int64.ZERO || e.value.totalHeal > Int64.ZERO || e.value.totalTakenDamage > Int64.ZERO)
-    .map((e) async {
+    .map((e) {
       final uid = e.key;
       final dpsData = e.value;
-      final info = await storage.getPlayerInfo(uid);
+      final info = storage.getPlayerInfoSync(uid);
       
       // Convert skills to serializable format
       final skillsList = dpsData.skills.entries.map((skillEntry) => {
@@ -890,13 +894,12 @@ class _HomePageState extends State<HomePage> {
         'skills': skillsList,
         'timeline': timelineMap,
       };
-    });
+    }).toList();
 
-    final players = await Future.wait(playersFutures);
     final combatDuration = storage.currentCombatDuration;
     
     // Send with selectedPlayerUid
-    debugPrint("[BM] Sending selectedPlayerUid to overlay: $_selectedPlayerUid");
+    _logger.log("Sending selectedPlayerUid to overlay: $_selectedPlayerUid");
     FlutterOverlayWindow.shareData({
       'players': players,
       'combatTime': combatDuration.inSeconds,
@@ -916,7 +919,7 @@ class _HomePageState extends State<HomePage> {
         final bytes = _hexToBytes(event);
         _packetAnalyzer.processPacket(bytes);
       } catch (e) {
-        debugPrint("Error processing packet: $e");
+        _logger.error("Error processing packet", error: e);
       }
     }
   }
@@ -968,7 +971,7 @@ class _HomePageState extends State<HomePage> {
         _onPacketData,
       );
     } on PlatformException catch (e) {
-      debugPrint("Failed to start VPN: '${e.message}'.");
+      _logger.error("Failed to start VPN", error: e.message);
     }
   }
 
@@ -980,7 +983,7 @@ class _HomePageState extends State<HomePage> {
       });
       _packetSubscription?.cancel();
     } on PlatformException catch (e) {
-      debugPrint("Failed to stop VPN: '${e.message}'.");
+      _logger.error("Failed to stop VPN", error: e.message);
     }
   }
 
@@ -1043,6 +1046,7 @@ class PlayerList extends StatefulWidget {
 }
 
 class _PlayerListState extends State<PlayerList> {
+  final LoggerService _logger = LoggerService();
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -1149,17 +1153,17 @@ class _PlayerListState extends State<PlayerList> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        debugPrint("[BM] Row tapped - Full player data: $p");
+        _logger.log("Row tapped - Full player data: $p");
         final uidStr = p['uid'] as String?;
-        debugPrint("[BM] Row tapped - uid: $uidStr, name: $name");
+        _logger.log("Row tapped - uid: $uidStr, name: $name");
         if (uidStr != null && uidStr.isNotEmpty) {
           // Envoyer un message au processus principal pour sélectionner ce joueur
           final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
           if (sendPort != null) {
             sendPort.send({'selectPlayer': uidStr});
-            debugPrint("[BM] Sent selectPlayer message: $uidStr");
+            _logger.log("Sent selectPlayer message: $uidStr");
           } else {
-            debugPrint("[BM] Could not find communication port");
+            _logger.log("Could not find communication port");
           }
         }
       },

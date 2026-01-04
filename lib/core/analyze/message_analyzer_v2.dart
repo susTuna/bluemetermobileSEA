@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:zstd/zstd.dart';
 
+import '../services/logger_service.dart';
 import '../state/data_storage.dart';
 import '../tools/byte_reader.dart';
 import 'message_handler_registry.dart';
@@ -8,6 +9,7 @@ import 'message_handler_registry.dart';
 class MessageAnalyzerV2 {
   final MessageHandlerRegistry _registry;
   final ZstdCodec _zstd = ZstdCodec();
+  final LoggerService _logger = LoggerService();
 
   // Message Types
   static const int _msgTypeCall = 1;
@@ -46,7 +48,7 @@ class MessageAnalyzerV2 {
         // _processReturnMsg(payload, isZstdCompressed);
         break;
       default:
-        // debugPrint("[BM] Unknown Message Type: $msgTypeId");
+        // _logger.log("Unknown Message Type: $msgTypeId");
         break;
     }
   }
@@ -60,7 +62,7 @@ class MessageAnalyzerV2 {
     final methodId = reader.readUInt32BE();
 
     if (serviceUuid != _combatServiceUuid) {
-      // debugPrint("[BM] Non-combat service: ${serviceUuid.toRadixString(16)}");
+      // _logger.log("Non-combat service: ${serviceUuid.toRadixString(16)}");
       return;
     }
 
@@ -69,17 +71,17 @@ class MessageAnalyzerV2 {
       try {
         msgPayload = Uint8List.fromList(_zstd.decode(msgPayload));
       } catch (e) {
-        debugPrint("[BM] Zstd decompression failed: $e");
+        _logger.error("Zstd decompression failed", error: e);
         return;
       }
     }
 
     final processor = _registry.getProcessor(methodId);
     if (processor != null) {
-      // debugPrint("[BM] Processing method: $methodId");
+      // _logger.log("Processing method: $methodId");
       processor.process(msgPayload);
     } else {
-      // debugPrint("[BM] No processor for method: $methodId");
+      // _logger.log("No processor for method: $methodId");
     }
   }
 

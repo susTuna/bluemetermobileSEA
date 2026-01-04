@@ -4,21 +4,16 @@ import 'package:protobuf/protobuf.dart';
 
 import '../../protocol/blue_protocol.dart';
 import '../../models/attr_type.dart';
+import '../../services/logger_service.dart';
 import '../../state/data_storage.dart';
+import '../../tools/entity_utils.dart';
 import 'message_processor.dart';
 
 abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
   final DataStorage _storage;
+  final LoggerService _logger = LoggerService();
 
   BaseDeltaInfoProcessor(this._storage);
-
-  bool _isUuidPlayerRaw(Int64 uuidRaw) {
-    return (uuidRaw & 0xFFFF) == 640;
-  }
-
-  Int64 _shiftRight16(Int64 uuidRaw) {
-    return uuidRaw >> 16;
-  }
 
   void _processAoiSyncDelta(AoiSyncDelta? delta) {
     if (delta == null) return;
@@ -26,8 +21,8 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
     final targetUuidRaw = delta.uuid;
     if (targetUuidRaw == Int64.ZERO) return;
 
-    final isTargetPlayer = _isUuidPlayerRaw(targetUuidRaw);
-    final targetUuid = _shiftRight16(targetUuidRaw);
+    final isTargetPlayer = EntityUtils.isUuidPlayerRaw(targetUuidRaw);
+    final targetUuid = EntityUtils.getPlayerUid(targetUuidRaw);
 
     // Process Attributes
     if (delta.hasAttrs() && isTargetPlayer) {
@@ -74,8 +69,8 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           final attackerRaw = d.topSummonerId != Int64.ZERO ? d.topSummonerId : d.attackerUuid;
           if (attackerRaw == Int64.ZERO) continue;
 
-          final isAttackerPlayer = _isUuidPlayerRaw(attackerRaw);
-          final attackerUuid = _shiftRight16(attackerRaw);
+          final isAttackerPlayer = EntityUtils.isUuidPlayerRaw(attackerRaw);
+          final attackerUuid = EntityUtils.getPlayerUid(attackerRaw);
 
           // Only record if attacker or target is a player (or both)
           // Actually, usually we care if attacker is player (DPS) or target is player (Damage Taken)
@@ -168,12 +163,12 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
         final uuidRaw = deltaInfo.uuid;
         
         // Shift the UUID to get the player UID (consistent with other processors)
-        final playerUid = uuidRaw >> 16;
+        final playerUid = EntityUtils.getPlayerUid(uuidRaw);
         
         if (playerUid != Int64.ZERO && _storage.currentPlayerUuid != playerUid) {
           _storage.currentPlayerUuid = playerUid;
           _storage.ensurePlayer(playerUid);
-          debugPrint("[BM] SyncToMeDeltaInfo - Set currentPlayerUuid to: $playerUid (from raw: $uuidRaw)");
+          _logger.log("SyncToMeDeltaInfo - Set currentPlayerUuid to: $playerUid (from raw: $uuidRaw)");
         }
 
         if (deltaInfo.hasBaseDelta()) {
@@ -181,7 +176,7 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
         }
       }
     } catch (e) {
-      debugPrint("Error processing SyncToMeDeltaInfo: $e");
+      _logger.error("Error processing SyncToMeDeltaInfo", error: e);
     }
   }
 }
@@ -199,7 +194,7 @@ class SyncNearDeltaInfoProcessor extends BaseDeltaInfoProcessor {
         }
       }
     } catch (e) {
-      debugPrint("Error processing SyncNearDeltaInfo: $e");
+      _logger.error("Error processing SyncNearDeltaInfo", error: e);
     }
   }
 }

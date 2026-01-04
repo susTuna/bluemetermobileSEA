@@ -4,11 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/player_info.dart';
 import '../models/dps_data.dart';
 import '../services/database_service.dart';
+import '../services/logger_service.dart';
 
 class DataStorage extends ChangeNotifier {
   static final DataStorage _instance = DataStorage._internal();
   factory DataStorage() => _instance;
   DataStorage._internal();
+
+  final LoggerService _logger = LoggerService();
 
   Int64 _currentPlayerUuid = Int64.ZERO;
   Int64 get currentPlayerUuid => _currentPlayerUuid;
@@ -26,7 +29,7 @@ class DataStorage extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('current_player_uuid', uuid.toString());
     } catch (e) {
-      debugPrint("[BM] Error persisting CurrentPlayerUUID: $e");
+      _logger.error("Error persisting CurrentPlayerUUID", error: e);
     }
   }
   
@@ -107,6 +110,10 @@ class DataStorage extends ChangeNotifier {
   final Set<Int64> _notFoundUids = {};
   final Set<Int64> _pendingFetches = {};
 
+  PlayerInfo? getPlayerInfoSync(Int64 uid) {
+    return _playerInfoDatas[uid];
+  }
+
   Future<PlayerInfo?> getPlayerInfo(Int64 uid) async {
     if (_playerInfoDatas.containsKey(uid)) {
       return _playerInfoDatas[uid];
@@ -143,7 +150,7 @@ class DataStorage extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint("[BM] Error fetching player from DB: $e");
+      _logger.error("Error fetching player from DB", error: e);
     }
     return null;
   }
@@ -168,7 +175,7 @@ class DataStorage extends ChangeNotifier {
 
   void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick, {String? skillId}) {
     _onAction();
-    debugPrint("[BM] addDamage - Attacker: $attackerUid, Target: $targetUid, Damage: $damage, CurrentPlayer: $_currentPlayerUuid");
+    _logger.log("addDamage - Attacker: $attackerUid, Target: $targetUid, Damage: $damage, CurrentPlayer: $_currentPlayerUuid");
     // 1. Add Damage Dealt to Attacker
     var attackerData = getOrCreateDpsData(attackerUid);
     attackerData.startLoggedTick ??= tick;
@@ -216,7 +223,7 @@ class DataStorage extends ChangeNotifier {
 
   void addHealing(Int64 healerUid, Int64 targetUid, Int64 healAmount, int tick, {String? skillId}) {
     _onAction();
-    debugPrint("[BM] addHealing - Healer: $healerUid, Target: $targetUid, Heal: $healAmount, CurrentPlayer: $_currentPlayerUuid");
+    _logger.log("addHealing - Healer: $healerUid, Target: $targetUid, Heal: $healAmount, CurrentPlayer: $_currentPlayerUuid");
     // 1. Add Heal Output to Healer
     var healerData = getOrCreateDpsData(healerUid);
     healerData.startLoggedTick ??= tick;
@@ -268,7 +275,7 @@ class DataStorage extends ChangeNotifier {
   void setPlayerName(Int64 uid, String name) {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.name = name;
-    debugPrint("[BM] setPlayerName called: UID=$uid, Name=$name");
+    _logger.log("setPlayerName called: UID=$uid, Name=$name");
     notifyListeners();
   }
 

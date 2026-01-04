@@ -3,11 +3,13 @@ import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../protocol/blue_protocol.dart';
+import '../../services/logger_service.dart';
 import '../../state/data_storage.dart';
 import 'message_processor.dart';
 
 class SyncContainerDirtyDataProcessor implements IMessageProcessor {
   final DataStorage _storage;
+  final LoggerService _logger = LoggerService();
 
   SyncContainerDirtyDataProcessor(this._storage);
 
@@ -34,20 +36,20 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
       // No, we need the real UUID.
       
       if (_storage.currentPlayerUuid == Int64.ZERO) {
-         debugPrint("[BM] SyncContainerDirtyData received but CurrentPlayerUUID is 0. Ignoring.");
+         _logger.log("SyncContainerDirtyData received but CurrentPlayerUUID is 0. Ignoring.");
          return;
       }
 
       final playerUid = _storage.currentPlayerUuid; 
-      debugPrint("[BM] SyncContainerDirtyData processing for PlayerUID: $playerUid");
+      _logger.log("SyncContainerDirtyData processing for PlayerUID: $playerUid");
       
       _storage.ensurePlayer(playerUid);
 
-      debugPrint("[BM] SyncContainerDirtyData FieldIndex: $fieldIndex");
+      _logger.log("SyncContainerDirtyData FieldIndex: $fieldIndex");
 
       // Special handling for 0xFFFFFFFD (4294967293)
       if (fieldIndex == 0xFFFFFFFD || fieldIndex == 4294967293) {
-        debugPrint("[BM] SyncContainerDirtyData - Special marker 0xFFFFFFFD detected");
+        _logger.log("SyncContainerDirtyData - Special marker 0xFFFFFFFD detected");
         // This might be a special marker, try to read the data after it
         _tryReadSpecialMarkerData(reader, playerUid);
         return;
@@ -64,28 +66,28 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
           _processProfession(reader, playerUid);
           break;
         default:
-          debugPrint("[BM] SyncContainerDirtyData Unhandled FieldIndex: $fieldIndex");
+          _logger.log("SyncContainerDirtyData Unhandled FieldIndex: $fieldIndex");
           break;
       }
     } catch (e) {
-      debugPrint("Error processing SyncContainerDirtyData: $e");
+      _logger.error("Error processing SyncContainerDirtyData", error: e);
     }
   }
 
   void _processNameAndPowerLevel(_BinaryReader reader, Int64 playerUid) {
     if (!_doesStreamHaveIdentifier(reader)) {
-        debugPrint("[BM] SyncContainerDirtyData _processNameAndPowerLevel: No Identifier");
+        _logger.log("SyncContainerDirtyData _processNameAndPowerLevel: No Identifier");
         return;
     }
     final fieldIndex = reader.readUInt32();
     reader.readInt32();
     
-    debugPrint("[BM] SyncContainerDirtyData _processNameAndPowerLevel FieldIndex: $fieldIndex");
+    _logger.log("SyncContainerDirtyData _processNameAndPowerLevel FieldIndex: $fieldIndex");
 
     switch (fieldIndex) {
       case 5:
         final playerName = _streamReadString(reader);
-        debugPrint("[BM] SyncContainerDirtyData Name Update (Field 5): $playerName");
+        _logger.log("SyncContainerDirtyData Name Update (Field 5): $playerName");
         if (playerName.isNotEmpty) {
           _storage.setPlayerName(playerUid, playerName);
         }
@@ -94,7 +96,7 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
       case 35:
         final fightPoint = reader.readUInt32();
         reader.readInt32();
-        debugPrint("[BM] SyncContainerDirtyData Power Update: $fightPoint");
+        _logger.log("SyncContainerDirtyData Power Update: $fightPoint");
         if (fightPoint != 0) {
           _storage.setPlayerCombatPower(playerUid, fightPoint);
         }

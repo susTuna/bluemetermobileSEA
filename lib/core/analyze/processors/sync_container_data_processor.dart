@@ -2,11 +2,14 @@ import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../protocol/blue_protocol.dart';
+import '../../services/logger_service.dart';
 import '../../state/data_storage.dart';
+import '../../tools/entity_utils.dart';
 import 'message_processor.dart';
 
 class SyncContainerDataProcessor implements IMessageProcessor {
   final DataStorage _storage;
+  final LoggerService _logger = LoggerService();
 
   SyncContainerDataProcessor(this._storage);
 
@@ -20,9 +23,9 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       if (vData.charId == Int64.ZERO) return;
 
       // CharId is the Raw UUID, so we need to shift it to get the Player UID.
-      final playerUid = vData.charId >> 16;
+      final playerUid = EntityUtils.getPlayerUid(vData.charId);
       
-      debugPrint("[BM] SyncContainerData received. RawID: ${vData.charId}, PlayerUID: $playerUid");
+      _logger.log("SyncContainerData received. RawID: ${vData.charId}, PlayerUID: $playerUid");
 
       // Update current player UID if not set or different? 
       // Usually SyncContainerData is for "Me".
@@ -43,17 +46,17 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       }
 
       if (vData.hasCharBase()) {
-        debugPrint("[BM] SyncContainerData Name: '${vData.charBase.name}'");
+        _logger.log("SyncContainerData Name: '${vData.charBase.name}'");
         if (vData.charBase.name.isNotEmpty) {
           _storage.setPlayerName(playerUid, vData.charBase.name);
         } else {
-          debugPrint("[BM] SyncContainerData received but Name is empty!");
+          _logger.log("SyncContainerData received but Name is empty!");
         }
         if (vData.charBase.fightPoint != 0) {
           _storage.setPlayerCombatPower(playerUid, vData.charBase.fightPoint);
         }
       } else {
-        debugPrint("[BM] SyncContainerData received but CharBase is missing!");
+        _logger.log("SyncContainerData received but CharBase is missing!");
       }
 
       if (vData.hasProfessionList() && vData.professionList.curProfessionId != 0) {
@@ -61,7 +64,7 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       }
 
     } catch (e) {
-      debugPrint("Error processing SyncContainerData: $e");
+      _logger.error("Error processing SyncContainerData", error: e);
     }
   }
 }

@@ -1,12 +1,13 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 
+import '../services/logger_service.dart';
 import '../state/data_storage.dart';
 import 'message_analyzer_v2.dart';
 
 class PacketAnalyzerV2 {
   final BytesBuilder _buffer = BytesBuilder();
   final MessageAnalyzerV2 _messageAnalyzer;
+  final LoggerService _logger = LoggerService();
 
   PacketAnalyzerV2(DataStorage storage) : _messageAnalyzer = MessageAnalyzerV2(storage);
 
@@ -22,7 +23,7 @@ class PacketAnalyzerV2 {
 
       // Check for handshake signature (00 63 33 53) which is 6499155
       if (packetSize == 0x00633353) {
-        debugPrint("[BM] Handshake detected (00 63 33 53), skipping 6 bytes...");
+        _logger.log("Handshake detected (00 63 33 53), skipping 6 bytes...");
         if (bytes.length >= 6) {
           final remaining = bytes.sublist(6);
           _buffer.clear();
@@ -34,7 +35,7 @@ class PacketAnalyzerV2 {
       }
 
       if (packetSize < 4 || packetSize > 10000000) {
-        debugPrint("[BM] Invalid packet size: $packetSize. Buffer len: ${bytes.length}. Clearing buffer.");
+        _logger.log("Invalid packet size: $packetSize. Buffer len: ${bytes.length}. Clearing buffer.");
         _buffer.clear();
         break;
       }
@@ -57,7 +58,7 @@ class PacketAnalyzerV2 {
       try {
         _messageAnalyzer.process(packetBody);
       } catch (e) {
-        debugPrint("[BM] Error processing packet: $e");
+        _logger.error("Error processing packet", error: e);
       }
     }
   }
