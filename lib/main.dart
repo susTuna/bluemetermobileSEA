@@ -612,6 +612,8 @@ class _OverlayWidgetState extends State<OverlayWidget>
       maxHp: Int64(playerData['maxHp'] ?? 0),
     );
 
+    final isMe = playerData['isMe'] == true;
+
     return Material(
       color: Colors.transparent,
       child: GestureDetector(
@@ -658,6 +660,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
             dpsValue: dpsValue,
             hpsValue: hpsValue,
             takenDpsValue: takenDpsValue,
+            isMe: isMe,
             onClose: () async {
               // Restore original window size before closing detail
               await _restoreOriginalSize();

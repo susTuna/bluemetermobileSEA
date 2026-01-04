@@ -3,6 +3,7 @@ import '../core/models/classes.dart';
 import '../core/models/player_info.dart';
 import '../core/models/dps_data.dart';
 import '../core/data/skill_names.dart';
+import '../core/services/translation_service.dart';
 import 'player_dps_chart.dart';
 
 class PlayerDetailCard extends StatelessWidget {
@@ -11,6 +12,7 @@ class PlayerDetailCard extends StatelessWidget {
   final double dpsValue;
   final double hpsValue;
   final double takenDpsValue;
+  final bool isMe;
   final VoidCallback onClose;
 
   const PlayerDetailCard({
@@ -20,13 +22,17 @@ class PlayerDetailCard extends StatelessWidget {
     required this.dpsValue,
     required this.hpsValue,
     required this.takenDpsValue,
+    this.isMe = false,
     required this.onClose,
   });
 
   @override
   Widget build(BuildContext context) {
     final cls = Classes.fromId(playerInfo?.professionId ?? 0);
-    final name = playerInfo?.name ?? "Unknown";
+    var name = playerInfo?.name ?? "Unknown";
+    if (isMe && (name == "Unknown" || name.isEmpty)) {
+      name = TranslationService().translate('Me');
+    }
 
     return Material(
       color: Colors.transparent,

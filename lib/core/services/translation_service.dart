@@ -30,6 +30,7 @@ class TranslationService {
       'NoData': 'No data',
       'Start': 'Start',
       'Stop': 'Stop',
+      'Me': 'Me',
     },
     'fr': {
       'Unknown': 'Inconnu',
@@ -47,6 +48,7 @@ class TranslationService {
       'NoData': 'Pas de données',
       'Start': 'Démarrer',
       'Stop': 'Arrêter',
+      'Me': 'Moi',
     },
     'zh': {
       'Unknown': '未知',
