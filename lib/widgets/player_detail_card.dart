@@ -111,14 +111,14 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                     flex: 5,
                     child: Column(
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(8, 8, 8, 4),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                "COMPÉTENCES",
-                                style: TextStyle(
+                                TranslationService().translate('Skills'),
+                                style: const TextStyle(
                                   color: Colors.white54,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
@@ -126,8 +126,8 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                                 ),
                               ),
                               Text(
-                                "DÉTAILS",
-                                style: TextStyle(
+                                TranslationService().translate('Details'),
+                                style: const TextStyle(
                                   color: Colors.white54,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
@@ -233,16 +233,16 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     final stats = <Widget>[];
     
     if (info.level != null && info.level! > 0) {
-      stats.add(_buildStatBadge("Lv.${info.level}", Colors.blueGrey));
+      stats.add(_buildStatBadge("${TranslationService().translate('Lv')}.${info.level}", Colors.blueGrey));
     }
     if (info.combatPower != null && info.combatPower! > 0) {
-      stats.add(_buildStatBadge("CP: ${_formatNumber(info.combatPower!)}", Colors.amber));
+      stats.add(_buildStatBadge("${TranslationService().translate('CS')}: ${_formatNumber(info.combatPower!)}", Colors.amber));
     }
     if (info.critical != null && info.critical! > 0) {
-      stats.add(_buildStatBadge("Crit: ${info.critical}", Colors.redAccent));
+      stats.add(_buildStatBadge("${TranslationService().translate('Crit')}: ${info.critical}", Colors.redAccent));
     }
     if (info.lucky != null && info.lucky! > 0) {
-      stats.add(_buildStatBadge("Luck: ${info.lucky}", Colors.greenAccent));
+      stats.add(_buildStatBadge("${TranslationService().translate('Luck')}: ${info.lucky}", Colors.greenAccent));
     }
 
     if (stats.isEmpty) return const SizedBox.shrink();
@@ -303,7 +303,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
           )),
           const SizedBox(width: 8),
           Expanded(child: _buildStatBox(
-            label: "Reçu",
+            label: TranslationService().translate('Received'),
             value: widget.takenDpsValue,
             total: widget.dpsData.totalTakenDamage.toInt(),
             color: Colors.orangeAccent,
@@ -367,7 +367,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                   ),
                 ),
                 Text(
-                  "Tot: ${_formatNumber(total)}",
+                  "${TranslationService().translate('Total')}: ${_formatNumber(total)}",
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 7,
@@ -382,10 +382,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
 
   Widget _buildSkillsList() {
     if (widget.dpsData.skills.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
-          "Aucune donnée de compétence",
-          style: TextStyle(color: Colors.white24, fontSize: 12),
+          TranslationService().translate('NoSkillData'),
+          style: const TextStyle(color: Colors.white24, fontSize: 12),
         ),
       );
     }
@@ -510,7 +510,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                           ],
                         ),
                         Text(
-                          "${skill.hitCount} hits • Avg: ${_formatNumber(avg)}",
+                          "${skill.hitCount} ${TranslationService().translate('Hits')} • ${TranslationService().translate('Avg')}: ${_formatNumber(avg)}",
                           style: const TextStyle(
                             color: Colors.white38,
                             fontSize: 9,
