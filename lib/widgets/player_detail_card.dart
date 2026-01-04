@@ -3,6 +3,7 @@ import '../core/models/classes.dart';
 import '../core/models/player_info.dart';
 import '../core/models/dps_data.dart';
 import '../core/data/skill_names.dart';
+import 'player_dps_chart.dart';
 
 class PlayerDetailCard extends StatelessWidget {
   final PlayerInfo? playerInfo;
@@ -53,42 +54,69 @@ class PlayerDetailCard extends StatelessWidget {
             // Player Stats (Level, CP, etc.)
             if (playerInfo != null) _buildPlayerStats(playerInfo!),
 
-            // Combat Stats (DPS, HPS, Taken)
-            _buildCombatStats(),
-
-            const Divider(height: 1, color: Colors.white10),
-
-            // Skills Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            // Main Content Split
+            Expanded(
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text(
-                    "COMPÉTENCES",
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Left Side: Stats & Chart
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      children: [
+                        _buildCombatStats(),
+                        if (dpsData.timeline.isNotEmpty)
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
+                              child: PlayerDpsChart(dpsData: dpsData, height: double.infinity),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  Text(
-                    "DÉTAILS",
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+
+                  const VerticalDivider(width: 1, color: Colors.white10),
+
+                  // Right Side: Skills
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: const [
+                              Text(
+                                "COMPÉTENCES",
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              Text(
+                                "DÉTAILS",
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildSkillsList(),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-
-            // Skills List
-            Expanded(
-              child: _buildSkillsList(),
             ),
           ],
         ),
@@ -217,32 +245,32 @@ class PlayerDetailCard extends StatelessWidget {
 
   Widget _buildCombatStats() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
         children: [
-          _buildStatBox(
+          Expanded(child: _buildStatBox(
             label: "DPS",
             value: dpsValue,
             total: dpsData.totalAttackDamage.toInt(),
             color: Colors.redAccent,
             icon: Icons.bolt,
-          ),
+          )),
           const SizedBox(width: 8),
-          _buildStatBox(
+          Expanded(child: _buildStatBox(
             label: "HPS",
             value: hpsValue,
             total: dpsData.totalHeal.toInt(),
             color: Colors.greenAccent,
             icon: Icons.favorite,
-          ),
+          )),
           const SizedBox(width: 8),
-          _buildStatBox(
+          Expanded(child: _buildStatBox(
             label: "Reçu",
             value: takenDpsValue,
             total: dpsData.totalTakenDamage.toInt(),
             color: Colors.orangeAccent,
             icon: Icons.shield,
-          ),
+          )),
         ],
       ),
     );
@@ -255,51 +283,52 @@ class PlayerDetailCard extends StatelessWidget {
     required Color color,
     required IconData icon,
   }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 12, color: color),
-                const SizedBox(width: 4),
+                Icon(icon, size: 9, color: color),
+                const SizedBox(width: 2),
                 Text(
                   label,
                   style: TextStyle(
                     color: color,
-                    fontSize: 10,
+                    fontSize: 8,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              _formatNumber(value),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                _formatNumber(value),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             Text(
               "Tot: ${_formatNumber(total)}",
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 9,
+                fontSize: 7,
               ),
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildSkillsList() {
@@ -312,28 +341,50 @@ class PlayerDetailCard extends StatelessWidget {
       );
     }
 
-    final sortedSkills = dpsData.skills.values.toList()
+    // Aggregate skills by name
+    final Map<String, SkillData> aggregatedSkills = {};
+    
+    for (var skill in dpsData.skills.values) {
+      final name = getSkillName(int.tryParse(skill.skillId) ?? 0);
+      
+      if (aggregatedSkills.containsKey(name)) {
+        final existing = aggregatedSkills[name]!;
+        existing.totalDamage += skill.totalDamage;
+        existing.totalHeal += skill.totalHeal;
+        existing.hitCount += skill.hitCount;
+      } else {
+        // Create a copy to avoid modifying original data
+        aggregatedSkills[name] = SkillData(skillId: skill.skillId)
+          ..totalDamage = skill.totalDamage
+          ..totalHeal = skill.totalHeal
+          ..hitCount = skill.hitCount;
+      }
+    }
+
+    final sortedSkills = aggregatedSkills.entries.toList()
       ..sort((a, b) {
-        final totalA = a.totalDamage.toInt() + a.totalHeal.toInt();
-        final totalB = b.totalDamage.toInt() + b.totalHeal.toInt();
+        final totalA = a.value.totalDamage.toInt() + a.value.totalHeal.toInt();
+        final totalB = b.value.totalDamage.toInt() + b.value.totalHeal.toInt();
         return totalB.compareTo(totalA);
       });
 
     final totalDamageAndHeal = sortedSkills.fold<int>(
       0,
-      (sum, skill) => sum + skill.totalDamage.toInt() + skill.totalHeal.toInt(),
+      (sum, entry) => sum + entry.value.totalDamage.toInt() + entry.value.totalHeal.toInt(),
     );
 
     // Find max value for bar scaling
     final maxSkillTotal = sortedSkills.isNotEmpty 
-        ? (sortedSkills.first.totalDamage.toInt() + sortedSkills.first.totalHeal.toInt()) 
+        ? (sortedSkills.first.value.totalDamage.toInt() + sortedSkills.first.value.totalHeal.toInt()) 
         : 1;
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       itemCount: sortedSkills.length,
       itemBuilder: (context, index) {
-        final skill = sortedSkills[index];
+        final entry = sortedSkills[index];
+        final name = entry.key;
+        final skill = entry.value;
         final skillTotal = skill.totalDamage.toInt() + skill.totalHeal.toInt();
         final percentage = totalDamageAndHeal > 0 
             ? (skillTotal / totalDamageAndHeal * 100) 
@@ -369,7 +420,7 @@ class PlayerDetailCard extends StatelessWidget {
                     // Skill Name
                     Expanded(
                       child: Text(
-                        getSkillName(int.tryParse(skill.skillId) ?? 0),
+                        name,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,

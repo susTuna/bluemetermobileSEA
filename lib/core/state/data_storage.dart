@@ -185,6 +185,16 @@ class DataStorage extends ChangeNotifier {
       skill.hitCount++;
     }
 
+    // Track timeline data for Attacker (Damage Dealt)
+    if (attackerData.startLoggedTick != null) {
+      final relativeTime = (tick - attackerData.startLoggedTick!) ~/ 1000;
+      final slice = attackerData.timeline.putIfAbsent(relativeTime, () => TimeSlice());
+      slice.damage += damage.toInt();
+      if (skillId != null && skillId.isNotEmpty) {
+        slice.skillDamage.update(skillId, (val) => val + damage.toInt(), ifAbsent: () => damage.toInt());
+      }
+    }
+
     // 2. Add Damage Taken to Target
     var targetData = getOrCreateDpsData(targetUid);
     targetData.startLoggedTick ??= tick;
@@ -192,6 +202,13 @@ class DataStorage extends ChangeNotifier {
     targetData.totalTakenDamage += damage;
     if (targetData.startLoggedTick != null) {
        targetData.activeCombatTicks = tick - targetData.startLoggedTick!;
+    }
+
+    // Track timeline data for Target (Damage Taken)
+    if (targetData.startLoggedTick != null) {
+      final relativeTime = (tick - targetData.startLoggedTick!) ~/ 1000;
+      final slice = targetData.timeline.putIfAbsent(relativeTime, () => TimeSlice());
+      slice.taken += damage.toInt();
     }
 
     notifyListeners();
@@ -216,6 +233,16 @@ class DataStorage extends ChangeNotifier {
       skill.hitCount++;
     }
     
+    // Track timeline data for Healer (Healing Done)
+    if (healerData.startLoggedTick != null) {
+      final relativeTime = (tick - healerData.startLoggedTick!) ~/ 1000;
+      final slice = healerData.timeline.putIfAbsent(relativeTime, () => TimeSlice());
+      slice.heal += healAmount.toInt();
+      if (skillId != null && skillId.isNotEmpty) {
+        slice.skillHeal.update(skillId, (val) => val + healAmount.toInt(), ifAbsent: () => healAmount.toInt());
+      }
+    }
+
     notifyListeners();
   }
 

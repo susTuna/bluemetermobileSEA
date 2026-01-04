@@ -139,10 +139,10 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
   Future<void> _resizeForDetail() async {
     try {
-      await FlutterOverlayWindow.resizeOverlay(300, 300, false);
-      debugPrint("[BM] Resized to detail view: 300x300");
+      await FlutterOverlayWindow.resizeOverlay(500, 200, false);
+      // debugPrint("[BM] Resized to detail view: 300x300");
     } catch (e) {
-      debugPrint("[BM] Error resizing for detail: $e");
+      // debugPrint("[BM] Error resizing for detail: $e");
     }
   }
 
@@ -567,6 +567,30 @@ class _OverlayWidgetState extends State<OverlayWidget>
       ..totalTakenDamage = Int64(playerData['totalTaken'] ?? 0)
       ..activeCombatTicks = playerData['activeCombatTicks'] ?? 0;
 
+    if (playerData.containsKey('timeline') && playerData['timeline'] != null) {
+      final timelineMap = playerData['timeline'] as Map<String, dynamic>;
+      timelineMap.forEach((key, value) {
+        final time = int.tryParse(key) ?? 0;
+        final sliceData = value as Map<String, dynamic>;
+        final slice = TimeSlice()
+          ..damage = sliceData['d'] ?? 0
+          ..heal = sliceData['h'] ?? 0
+          ..taken = sliceData['t'] ?? 0;
+        
+        if (sliceData.containsKey('sd')) {
+          (sliceData['sd'] as Map<String, dynamic>).forEach((k, v) {
+            slice.skillDamage[k] = v as int;
+          });
+        }
+        if (sliceData.containsKey('sh')) {
+          (sliceData['sh'] as Map<String, dynamic>).forEach((k, v) {
+            slice.skillHeal[k] = v as int;
+          });
+        }
+        dpsData.timeline[time] = slice;
+      });
+    }
+
     final skillsList = playerData['skills'] as List<dynamic>? ?? [];
     for (var skillMap in skillsList) {
       final skillData = SkillData(skillId: skillMap['skillId'])
@@ -754,6 +778,22 @@ class _HomePageState extends State<HomePage> {
         'hitCount': skillEntry.value.hitCount,
       }).toList();
       
+      // Convert timeline to serializable format
+      // Only send timeline if this is the selected player to save bandwidth
+      Map<String, dynamic>? timelineMap;
+      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
+        timelineMap = {};
+        dpsData.timeline.forEach((key, value) {
+          timelineMap![key.toString()] = {
+            'd': value.damage,
+            'h': value.heal,
+            't': value.taken,
+            'sd': value.skillDamage,
+            'sh': value.skillHeal,
+          };
+        });
+      }
+
       return {
         'uid': uid.toString(), // Add UID as string for serialization
         'name': info?.name ?? "Unknown",
@@ -773,6 +813,7 @@ class _HomePageState extends State<HomePage> {
         'lucky': info?.lucky ?? 0,
         'maxHp': info?.maxHp?.toInt() ?? 0,
         'skills': skillsList,
+        'timeline': timelineMap,
       };
     });
 
@@ -811,6 +852,22 @@ class _HomePageState extends State<HomePage> {
         'hitCount': skillEntry.value.hitCount,
       }).toList();
       
+      // Convert timeline to serializable format
+      // Only send timeline if this is the selected player to save bandwidth
+      Map<String, dynamic>? timelineMap;
+      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
+        timelineMap = {};
+        dpsData.timeline.forEach((key, value) {
+          timelineMap![key.toString()] = {
+            'd': value.damage,
+            'h': value.heal,
+            't': value.taken,
+            'sd': value.skillDamage,
+            'sh': value.skillHeal,
+          };
+        });
+      }
+
       return {
         'uid': uid.toString(),
         'name': info?.name ?? "Unknown",
@@ -830,6 +887,7 @@ class _HomePageState extends State<HomePage> {
         'lucky': info?.lucky ?? 0,
         'maxHp': info?.maxHp?.toInt() ?? 0,
         'skills': skillsList,
+        'timeline': timelineMap,
       };
     });
 

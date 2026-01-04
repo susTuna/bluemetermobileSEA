@@ -9,6 +9,14 @@ class SkillData {
   SkillData({required this.skillId});
 }
 
+class TimeSlice {
+  int damage = 0;
+  int heal = 0;
+  int taken = 0;
+  final Map<String, int> skillDamage = {};
+  final Map<String, int> skillHeal = {};
+}
+
 class DpsData {
   Int64 uid;
   int? startLoggedTick;
@@ -24,6 +32,9 @@ class DpsData {
 
   // Skill tracking
   final Map<String, SkillData> skills = {};
+  
+  // Timeline tracking (Key: seconds from start)
+  final Map<int, TimeSlice> timeline = {};
 
   DpsData({required this.uid});
 
