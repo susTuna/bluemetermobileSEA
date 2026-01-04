@@ -39,7 +39,7 @@ class PlayerDetailCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(0),
           border: Border.all(color: Colors.white10),
           boxShadow: [
             BoxShadow(

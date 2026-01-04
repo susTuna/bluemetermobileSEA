@@ -139,7 +139,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
   Future<void> _resizeForDetail() async {
     try {
-      await FlutterOverlayWindow.resizeOverlay(500, 200, false);
+      await FlutterOverlayWindow.resizeOverlay(500, 300, false);
       // debugPrint("[BM] Resized to detail view: 300x300");
     } catch (e) {
       // debugPrint("[BM] Error resizing for detail: $e");

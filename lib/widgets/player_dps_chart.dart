@@ -103,7 +103,15 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
   }
 
   Widget _buildTooltip(TimeSlice slice) {
-    final topSkills = slice.skillDamage.entries.toList()
+    // Aggregate skills by name to avoid duplicates
+    final Map<String, int> aggregatedSkills = {};
+    for (var entry in slice.skillDamage.entries) {
+      final skillId = int.tryParse(entry.key) ?? 0;
+      final skillName = getSkillName(skillId);
+      aggregatedSkills[skillName] = (aggregatedSkills[skillName] ?? 0) + entry.value;
+    }
+
+    final topSkills = aggregatedSkills.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     
     // Take top 3 skills
@@ -144,7 +152,7 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
                 children: [
                   Expanded(
                     child: Text(
-                      getSkillName(int.tryParse(e.key) ?? 0),
+                      e.key,
                       style: const TextStyle(color: Colors.white70, fontSize: 9),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -202,53 +210,52 @@ class _ChartPainter extends CustomPainter {
     final widthPerSecond = size.width / maxTime;
     final heightPerValue = size.height / maxValue;
 
+    // Draw Grid
+    _drawGrid(canvas, size);
+
     final paintDmg = Paint()
       ..color = Colors.redAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
     final paintHeal = Paint()
       ..color = Colors.greenAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
       
     final paintTaken = Paint()
       ..color = Colors.orangeAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-    final pathDmg = Path();
-    final pathHeal = Path();
-    final pathTaken = Path();
+    // Collect points
+    final pointsDmg = <Offset>[];
+    final pointsHeal = <Offset>[];
+    final pointsTaken = <Offset>[];
 
-    bool first = true;
-    // Sort keys to draw in order
     final sortedKeys = timeline.keys.toList()..sort();
+
+    // Add a starting point at 0,0 if not present, to make the graph start from left
+    // But timeline keys are seconds. If key 0 exists, it's fine.
+    // If the first key is e.g. 5, we might want to start drawing from 0?
+    // The current logic draws from the first available key.
+    // Let's stick to drawing available data points.
 
     for (var t in sortedKeys) {
       final slice = timeline[t]!;
       final x = t * widthPerSecond;
       
-      // Invert Y because canvas 0,0 is top-left
-      final yDmg = size.height - (slice.damage * heightPerValue);
-      final yHeal = size.height - (slice.heal * heightPerValue);
-      final yTaken = size.height - (slice.taken * heightPerValue);
-
-      if (first) {
-        pathDmg.moveTo(x, yDmg);
-        pathHeal.moveTo(x, yHeal);
-        pathTaken.moveTo(x, yTaken);
-        first = false;
-      } else {
-        pathDmg.lineTo(x, yDmg);
-        pathHeal.lineTo(x, yHeal);
-        pathTaken.lineTo(x, yTaken);
-      }
+      pointsDmg.add(Offset(x, size.height - (slice.damage * heightPerValue)));
+      pointsHeal.add(Offset(x, size.height - (slice.heal * heightPerValue)));
+      pointsTaken.add(Offset(x, size.height - (slice.taken * heightPerValue)));
     }
 
-    canvas.drawPath(pathDmg, paintDmg);
-    canvas.drawPath(pathHeal, paintHeal);
-    canvas.drawPath(pathTaken, paintTaken);
+    canvas.drawPath(_computeSmoothPath(pointsDmg), paintDmg);
+    canvas.drawPath(_computeSmoothPath(pointsHeal), paintHeal);
+    canvas.drawPath(_computeSmoothPath(pointsTaken), paintTaken);
 
     // Draw selection line
     if (selectedTime != null) {
@@ -262,9 +269,51 @@ class _ChartPainter extends CustomPainter {
       if (timeline.containsKey(selectedTime)) {
         final slice = timeline[selectedTime]!;
         final yDmg = size.height - (slice.damage * heightPerValue);
-        canvas.drawCircle(Offset(x, yDmg), 3, Paint()..color = Colors.red);
+        canvas.drawCircle(Offset(x, yDmg), 4, Paint()..color = Colors.red);
       }
     }
+  }
+
+  void _drawGrid(Canvas canvas, Size size) {
+    final paintGrid = Paint()
+      ..color = Colors.white10
+      ..strokeWidth = 1;
+
+    // Vertical lines (Time) - Draw 5 lines
+    int timeSteps = 5;
+    for (int i = 1; i < timeSteps; i++) {
+      double x = (size.width / timeSteps) * i;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paintGrid);
+    }
+
+    // Horizontal lines (Value) - Draw 4 lines
+    int valueSteps = 4;
+    for (int i = 1; i < valueSteps; i++) {
+      double y = (size.height / valueSteps) * i;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paintGrid);
+    }
+  }
+
+  Path _computeSmoothPath(List<Offset> points) {
+    final path = Path();
+    if (points.isEmpty) return path;
+    path.moveTo(points[0].dx, points[0].dy);
+    if (points.length < 2) return path;
+
+    for (int i = 0; i < points.length - 1; i++) {
+      final p0 = i > 0 ? points[i - 1] : points[i];
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      final p3 = i < points.length - 2 ? points[i + 2] : p2;
+
+      final cp1x = p1.dx + (p2.dx - p0.dx) * 0.2;
+      final cp1y = p1.dy + (p2.dy - p0.dy) * 0.2;
+      final cp2x = p2.dx - (p3.dx - p1.dx) * 0.2;
+      final cp2y = p2.dy - (p3.dy - p1.dy) * 0.2;
+
+      path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.dx, p2.dy);
+    }
+    return path;
   }
 
   @override
