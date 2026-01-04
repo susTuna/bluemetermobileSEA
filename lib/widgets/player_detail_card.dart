@@ -83,7 +83,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                 children: [
                   // Left Side: Stats & Chart
                   Expanded(
-                    flex: 4,
+                    flex: 5,
                     child: Column(
                       children: [
                         _buildCombatStats(),
@@ -108,7 +108,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
 
                   // Right Side: Skills
                   Expanded(
-                    flex: 5,
+                    flex: 4,
                     child: Column(
                       children: [
                         Padding(

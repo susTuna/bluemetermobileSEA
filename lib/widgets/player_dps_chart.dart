@@ -230,19 +230,19 @@ class _ChartPainter extends CustomPainter {
 
     final paintDmg = Paint()
       ..color = Colors.redAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 2.0
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final paintHeal = Paint()
       ..color = Colors.greenAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 2.0
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
       
     final paintTaken = Paint()
       ..color = Colors.orangeAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 2.0
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -326,10 +326,10 @@ class _ChartPainter extends CustomPainter {
       final p2 = points[i + 1];
       final p3 = i < points.length - 2 ? points[i + 2] : p2;
 
-      final cp1x = p1.dx + (p2.dx - p0.dx) * 0.2;
-      final cp1y = p1.dy + (p2.dy - p0.dy) * 0.2;
-      final cp2x = p2.dx - (p3.dx - p1.dx) * 0.2;
-      final cp2y = p2.dy - (p3.dy - p1.dy) * 0.2;
+      final cp1x = p1.dx + (p2.dx - p0.dx) * 0.1;
+      final cp1y = p1.dy + (p2.dy - p0.dy) * 0.1;
+      final cp2x = p2.dx - (p3.dx - p1.dx) * 0.1;
+      final cp2y = p2.dy - (p3.dy - p1.dy) * 0.1;
 
       path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.dx, p2.dy);
     }
