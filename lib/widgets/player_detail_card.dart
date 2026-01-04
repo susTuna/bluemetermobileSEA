@@ -138,6 +138,20 @@ class PlayerDetailCard extends StatelessWidget {
                       fontSize: 11,
                     ),
                   ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, size: 10, color: Colors.white54),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatDuration(dpsData.activeCombatTicks),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -419,6 +433,14 @@ class PlayerDetailCard extends StatelessWidget {
       default:
         return Colors.grey;
     }
+  }
+
+  String _formatDuration(int milliseconds) {
+    final duration = Duration(milliseconds: milliseconds);
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return "${twoDigitMinutes}:${twoDigitSeconds}";
   }
 
   String _formatNumber(num number) {

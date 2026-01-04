@@ -564,7 +564,8 @@ class _OverlayWidgetState extends State<OverlayWidget>
     final dpsData = DpsData(uid: uid)
       ..totalAttackDamage = Int64(playerData['total'] ?? 0)
       ..totalHeal = Int64(playerData['totalHeal'] ?? 0)
-      ..totalTakenDamage = Int64(playerData['totalTaken'] ?? 0);
+      ..totalTakenDamage = Int64(playerData['totalTaken'] ?? 0)
+      ..activeCombatTicks = playerData['activeCombatTicks'] ?? 0;
 
     final skillsList = playerData['skills'] as List<dynamic>? ?? [];
     for (var skillMap in skillsList) {
@@ -764,6 +765,7 @@ class _HomePageState extends State<HomePage> {
         'totalHeal': dpsData.totalHeal.toInt(),
         'takenDps': dpsData.simpleTakenDps,
         'totalTaken': dpsData.totalTakenDamage.toInt(),
+        'activeCombatTicks': dpsData.activeCombatTicks,
         'level': info?.level ?? 0,
         'combatPower': info?.combatPower ?? 0,
         'rankLevel': info?.rankLevel ?? 0,
@@ -820,6 +822,7 @@ class _HomePageState extends State<HomePage> {
         'totalHeal': dpsData.totalHeal.toInt(),
         'takenDps': dpsData.simpleTakenDps,
         'totalTaken': dpsData.totalTakenDamage.toInt(),
+        'activeCombatTicks': dpsData.activeCombatTicks,
         'level': info?.level ?? 0,
         'combatPower': info?.combatPower ?? 0,
         'rankLevel': info?.rankLevel ?? 0,
