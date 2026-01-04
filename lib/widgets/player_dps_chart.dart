@@ -25,7 +25,6 @@ class PlayerDpsChart extends StatefulWidget {
 
 class _PlayerDpsChartState extends State<PlayerDpsChart> {
   int? _selectedTime;
-  Offset? _touchPosition;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +49,6 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
           onPanUpdate: (details) => _handleTouch(details.localPosition, context),
           onPanEnd: (_) => setState(() {
             _selectedTime = null;
-            _touchPosition = null;
           }),
           child: Container(
             height: widget.height,
@@ -106,7 +104,6 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
     if (closestTime != null && minDiff < 5) { // Snap within 5 seconds
       setState(() {
         _selectedTime = closestTime;
-        _touchPosition = localPosition;
       });
     }
   }

@@ -1,7 +1,5 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:zstd/zstd.dart';
-import 'package:fixnum/fixnum.dart';
 
 import '../state/data_storage.dart';
 import '../tools/byte_reader.dart';

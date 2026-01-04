@@ -111,11 +111,11 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                     flex: 5,
                     child: Column(
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(8, 8, 8, 4),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: const [
+                            children: [
                               Text(
                                 "COMPÉTENCES",
                                 style: TextStyle(
@@ -546,7 +546,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     String twoDigits(int n) => n.toString().padLeft(2, "0");
     String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
     String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return "${twoDigitMinutes}:${twoDigitSeconds}";
+    return "$twoDigitMinutes:$twoDigitSeconds";
   }
 
   String _formatNumber(num number) {

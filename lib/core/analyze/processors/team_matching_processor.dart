@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../../protocol/blue_protocol.dart';
@@ -6,9 +5,7 @@ import '../../state/data_storage.dart';
 import 'message_processor.dart';
 
 class TeamMatchingProcessor implements IMessageProcessor {
-  final DataStorage _storage;
-
-  TeamMatchingProcessor(this._storage);
+  TeamMatchingProcessor(DataStorage storage);
 
   @override
   void process(Uint8List payload) {

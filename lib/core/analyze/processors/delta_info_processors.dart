@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart';
 import 'package:protobuf/protobuf.dart';
@@ -6,7 +5,6 @@ import 'package:protobuf/protobuf.dart';
 import '../../protocol/blue_protocol.dart';
 import '../../models/attr_type.dart';
 import '../../state/data_storage.dart';
-import '../../tools/byte_reader.dart';
 import 'message_processor.dart';
 
 abstract class BaseDeltaInfoProcessor implements IMessageProcessor {

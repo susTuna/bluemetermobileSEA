@@ -134,7 +134,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
     // Save current window size from _restoredWidth and _restoredHeight
     _savedWidth = _restoredWidth;
     _savedHeight = _restoredHeight;
-    debugPrint("[BM] Saved window size: ${_savedWidth}x${_savedHeight}");
+    debugPrint("[BM] Saved window size: $_savedWidth" "x" "$_savedHeight");
   }
 
   Future<void> _resizeForDetail() async {
@@ -153,7 +153,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
         _savedHeight.toInt(),
         false,
       );
-      debugPrint("[BM] Restored window size: ${_savedWidth}x${_savedHeight}");
+      debugPrint("[BM] Restored window size: $_savedWidth" "x" "$_savedHeight");
     } catch (e) {
       debugPrint("[BM] Error restoring window size: $e");
     }
