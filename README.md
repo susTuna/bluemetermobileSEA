@@ -136,3 +136,14 @@ flutter build apk --release
 **Support / Donations**
  - If you'd like to support the project, you can buy me a coffee via PayPal: https://paypal.me/JBourny
 
+---
+
+## Screenshots / Captures d'écran
+
+<p float="left">
+  <img src="images/Screenshot_BPSR_20260104_150155.jpg" width="200" />
+  <img src="images/Screenshot_BPSR_20260104_150214.jpg" width="200" /> 
+  <img src="images/Screenshot_BPSR_20260104_150237.jpg" width="200" />
+  <img src="images/Screenshot_BPSR_20260104_150241.jpg" width="200" />
+</p>
+
