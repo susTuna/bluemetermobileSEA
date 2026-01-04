@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fixnum/fixnum.dart';
 import '../core/models/classes.dart';
 import '../core/models/player_info.dart';
 import '../core/models/dps_data.dart';
@@ -6,7 +7,7 @@ import '../core/data/skill_names.dart';
 import '../core/services/translation_service.dart';
 import 'player_dps_chart.dart';
 
-class PlayerDetailCard extends StatelessWidget {
+class PlayerDetailCard extends StatefulWidget {
   final PlayerInfo? playerInfo;
   final DpsData dpsData;
   final double dpsValue;
@@ -14,6 +15,9 @@ class PlayerDetailCard extends StatelessWidget {
   final double takenDpsValue;
   final bool isMe;
   final VoidCallback onClose;
+  final Function(DragStartDetails)? onDragStart;
+  final Function(DragUpdateDetails)? onDragUpdate;
+  final Function(DragEndDetails)? onDragEnd;
 
   const PlayerDetailCard({
     super.key,
@@ -24,13 +28,25 @@ class PlayerDetailCard extends StatelessWidget {
     required this.takenDpsValue,
     this.isMe = false,
     required this.onClose,
+    this.onDragStart,
+    this.onDragUpdate,
+    this.onDragEnd,
   });
 
   @override
+  State<PlayerDetailCard> createState() => _PlayerDetailCardState();
+}
+
+class _PlayerDetailCardState extends State<PlayerDetailCard> {
+  bool _showDps = true;
+  bool _showHps = true;
+  bool _showTaken = true;
+
+  @override
   Widget build(BuildContext context) {
-    final cls = Classes.fromId(playerInfo?.professionId ?? 0);
-    var name = playerInfo?.name ?? "Unknown";
-    if (isMe && (name == "Unknown" || name.isEmpty)) {
+    final cls = Classes.fromId(widget.playerInfo?.professionId ?? 0);
+    var name = widget.playerInfo?.name ?? "Unknown";
+    if (widget.isMe && (name == "Unknown" || name.isEmpty)) {
       name = TranslationService().translate('Me');
     }
 
@@ -58,7 +74,7 @@ class PlayerDetailCard extends StatelessWidget {
             const Divider(height: 1, color: Colors.white10),
 
             // Player Stats (Level, CP, etc.)
-            if (playerInfo != null) _buildPlayerStats(playerInfo!),
+            if (widget.playerInfo != null) _buildPlayerStats(widget.playerInfo!),
 
             // Main Content Split
             Expanded(
@@ -71,11 +87,17 @@ class PlayerDetailCard extends StatelessWidget {
                     child: Column(
                       children: [
                         _buildCombatStats(),
-                        if (dpsData.timeline.isNotEmpty)
+                        if (widget.dpsData.timeline.isNotEmpty)
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
-                              child: PlayerDpsChart(dpsData: dpsData, height: double.infinity),
+                              child: PlayerDpsChart(
+                                dpsData: widget.dpsData, 
+                                height: double.infinity,
+                                showDps: _showDps,
+                                showHps: _showHps,
+                                showTaken: _showTaken,
+                              ),
                             ),
                           ),
                       ],
@@ -131,72 +153,78 @@ class PlayerDetailCard extends StatelessWidget {
   }
 
   Widget _buildHeader(String name, Classes cls) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          if (cls != Classes.unknown) ...[
-            Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Image.asset(
-                cls.iconPath,
-                width: 24,
-                height: 24,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.help, color: Colors.white24, size: 24),
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: _getClassColor(cls),
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: widget.onDragStart,
+      onPanUpdate: widget.onDragUpdate,
+      onPanEnd: widget.onDragEnd,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            if (cls != Classes.unknown) ...[
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                if (cls != Classes.unknown)
+                child: Image.asset(
+                  cls.iconPath,
+                  width: 24,
+                  height: 24,
+                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.help, color: Colors.white24, size: 24),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    cls.name,
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 11,
+                    name,
+                    style: TextStyle(
+                      color: _getClassColor(cls),
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.timer_outlined, size: 10, color: Colors.white54),
-                    const SizedBox(width: 4),
+                  if (cls != Classes.unknown)
                     Text(
-                      _formatDuration(dpsData.activeCombatTicks),
+                      cls.name,
                       style: const TextStyle(
                         color: Colors.white54,
-                        fontSize: 10,
+                        fontSize: 11,
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.timer_outlined, size: 10, color: Colors.white54),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatDuration(widget.dpsData.activeCombatTicks),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-            onPressed: onClose,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            splashRadius: 20,
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: widget.onClose,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -256,26 +284,32 @@ class PlayerDetailCard extends StatelessWidget {
         children: [
           Expanded(child: _buildStatBox(
             label: "DPS",
-            value: dpsValue,
-            total: dpsData.totalAttackDamage.toInt(),
+            value: widget.dpsValue,
+            total: widget.dpsData.totalAttackDamage.toInt(),
             color: Colors.redAccent,
             icon: Icons.bolt,
+            isActive: _showDps,
+            onTap: () => setState(() => _showDps = !_showDps),
           )),
           const SizedBox(width: 8),
           Expanded(child: _buildStatBox(
             label: "HPS",
-            value: hpsValue,
-            total: dpsData.totalHeal.toInt(),
+            value: widget.hpsValue,
+            total: widget.dpsData.totalHeal.toInt(),
             color: Colors.greenAccent,
             icon: Icons.favorite,
+            isActive: _showHps,
+            onTap: () => setState(() => _showHps = !_showHps),
           )),
           const SizedBox(width: 8),
           Expanded(child: _buildStatBox(
             label: "Reçu",
-            value: takenDpsValue,
-            total: dpsData.totalTakenDamage.toInt(),
+            value: widget.takenDpsValue,
+            total: widget.dpsData.totalTakenDamage.toInt(),
             color: Colors.orangeAccent,
             icon: Icons.shield,
+            isActive: _showTaken,
+            onTap: () => setState(() => _showTaken = !_showTaken),
           )),
         ],
       ),
@@ -288,57 +322,66 @@ class PlayerDetailCard extends StatelessWidget {
     required int total,
     required Color color,
     required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 9, color: color),
-                const SizedBox(width: 2),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: isActive ? 1.0 : 0.3,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 9, color: color),
+                    const SizedBox(width: 2),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _formatNumber(value),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
                 Text(
-                  label,
+                  "Tot: ${_formatNumber(total)}",
                   style: TextStyle(
-                    color: color,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 7,
                   ),
                 ),
               ],
             ),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                _formatNumber(value),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Text(
-              "Tot: ${_formatNumber(total)}",
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 7,
-              ),
-            ),
-          ],
-        ),
-      );
+          ),
+      ),
+    );
   }
 
   Widget _buildSkillsList() {
-    if (dpsData.skills.isEmpty) {
+    if (widget.dpsData.skills.isEmpty) {
       return const Center(
         child: Text(
           "Aucune donnée de compétence",
@@ -350,19 +393,25 @@ class PlayerDetailCard extends StatelessWidget {
     // Aggregate skills by name
     final Map<String, SkillData> aggregatedSkills = {};
     
-    for (var skill in dpsData.skills.values) {
+    for (var skill in widget.dpsData.skills.values) {
       final name = getSkillName(int.tryParse(skill.skillId) ?? 0);
       
+      // Filter values based on visibility
+      final damage = _showDps ? skill.totalDamage : Int64.ZERO;
+      final heal = _showHps ? skill.totalHeal : Int64.ZERO;
+      
+      if (damage == 0 && heal == 0) continue;
+
       if (aggregatedSkills.containsKey(name)) {
         final existing = aggregatedSkills[name]!;
-        existing.totalDamage += skill.totalDamage;
-        existing.totalHeal += skill.totalHeal;
+        existing.totalDamage += damage;
+        existing.totalHeal += heal;
         existing.hitCount += skill.hitCount;
       } else {
         // Create a copy to avoid modifying original data
         aggregatedSkills[name] = SkillData(skillId: skill.skillId)
-          ..totalDamage = skill.totalDamage
-          ..totalHeal = skill.totalHeal
+          ..totalDamage = damage
+          ..totalHeal = heal
           ..hitCount = skill.hitCount;
       }
     }

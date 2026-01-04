@@ -6,11 +6,17 @@ import '../core/data/skill_names.dart';
 class PlayerDpsChart extends StatefulWidget {
   final DpsData dpsData;
   final double height;
+  final bool showDps;
+  final bool showHps;
+  final bool showTaken;
 
   const PlayerDpsChart({
     super.key,
     required this.dpsData,
     this.height = 150,
+    this.showDps = true,
+    this.showHps = true,
+    this.showTaken = true,
   });
 
   @override
@@ -54,6 +60,9 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
               painter: _ChartPainter(
                 timeline: widget.dpsData.timeline,
                 selectedTime: _selectedTime,
+                showDps: widget.showDps,
+                showHps: widget.showHps,
+                showTaken: widget.showTaken,
               ),
             ),
           ),
@@ -137,14 +146,14 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
               ),
               Row(
                 children: [
-                  if (slice.damage > 0) Text("D: ${_formatNumber(slice.damage)} ", style: const TextStyle(color: Colors.redAccent, fontSize: 10)),
-                  if (slice.heal > 0) Text("H: ${_formatNumber(slice.heal)} ", style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
-                  if (slice.taken > 0) Text("T: ${_formatNumber(slice.taken)}", style: const TextStyle(color: Colors.orangeAccent, fontSize: 10)),
+                  if (widget.showDps && slice.damage > 0) Text("D: ${_formatNumber(slice.damage)} ", style: const TextStyle(color: Colors.redAccent, fontSize: 10)),
+                  if (widget.showHps && slice.heal > 0) Text("H: ${_formatNumber(slice.heal)} ", style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                  if (widget.showTaken && slice.taken > 0) Text("T: ${_formatNumber(slice.taken)}", style: const TextStyle(color: Colors.orangeAccent, fontSize: 10)),
                 ],
               )
             ],
           ),
-          if (displaySkills.isNotEmpty) ...[
+          if (displaySkills.isNotEmpty && widget.showDps) ...[
             const SizedBox(height: 4),
             ...displaySkills.map((e) => Padding(
               padding: const EdgeInsets.only(bottom: 2),
@@ -188,8 +197,17 @@ class _PlayerDpsChartState extends State<PlayerDpsChart> {
 class _ChartPainter extends CustomPainter {
   final Map<int, TimeSlice> timeline;
   final int? selectedTime;
+  final bool showDps;
+  final bool showHps;
+  final bool showTaken;
 
-  _ChartPainter({required this.timeline, this.selectedTime});
+  _ChartPainter({
+    required this.timeline,
+    this.selectedTime,
+    required this.showDps,
+    required this.showHps,
+    required this.showTaken,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -201,9 +219,9 @@ class _ChartPainter extends CustomPainter {
     // Find max value for Y axis scaling
     int maxValue = 0;
     for (var slice in timeline.values) {
-      maxValue = max(maxValue, slice.damage);
-      maxValue = max(maxValue, slice.heal);
-      maxValue = max(maxValue, slice.taken);
+      if (showDps) maxValue = max(maxValue, slice.damage);
+      if (showHps) maxValue = max(maxValue, slice.heal);
+      if (showTaken) maxValue = max(maxValue, slice.taken);
     }
     if (maxValue == 0) maxValue = 1;
 
@@ -238,24 +256,18 @@ class _ChartPainter extends CustomPainter {
 
     final sortedKeys = timeline.keys.toList()..sort();
 
-    // Add a starting point at 0,0 if not present, to make the graph start from left
-    // But timeline keys are seconds. If key 0 exists, it's fine.
-    // If the first key is e.g. 5, we might want to start drawing from 0?
-    // The current logic draws from the first available key.
-    // Let's stick to drawing available data points.
-
     for (var t in sortedKeys) {
       final slice = timeline[t]!;
       final x = t * widthPerSecond;
       
-      pointsDmg.add(Offset(x, size.height - (slice.damage * heightPerValue)));
-      pointsHeal.add(Offset(x, size.height - (slice.heal * heightPerValue)));
-      pointsTaken.add(Offset(x, size.height - (slice.taken * heightPerValue)));
+      if (showDps) pointsDmg.add(Offset(x, size.height - (slice.damage * heightPerValue)));
+      if (showHps) pointsHeal.add(Offset(x, size.height - (slice.heal * heightPerValue)));
+      if (showTaken) pointsTaken.add(Offset(x, size.height - (slice.taken * heightPerValue)));
     }
 
-    canvas.drawPath(_computeSmoothPath(pointsDmg), paintDmg);
-    canvas.drawPath(_computeSmoothPath(pointsHeal), paintHeal);
-    canvas.drawPath(_computeSmoothPath(pointsTaken), paintTaken);
+    if (showDps) canvas.drawPath(_computeSmoothPath(pointsDmg), paintDmg);
+    if (showHps) canvas.drawPath(_computeSmoothPath(pointsHeal), paintHeal);
+    if (showTaken) canvas.drawPath(_computeSmoothPath(pointsTaken), paintTaken);
 
     // Draw selection line
     if (selectedTime != null) {
@@ -268,8 +280,19 @@ class _ChartPainter extends CustomPainter {
       // Draw dot at intersection points
       if (timeline.containsKey(selectedTime)) {
         final slice = timeline[selectedTime]!;
-        final yDmg = size.height - (slice.damage * heightPerValue);
-        canvas.drawCircle(Offset(x, yDmg), 4, Paint()..color = Colors.red);
+        
+        if (showDps) {
+          final yDmg = size.height - (slice.damage * heightPerValue);
+          canvas.drawCircle(Offset(x, yDmg), 4, Paint()..color = Colors.red);
+        }
+        if (showHps) {
+          final yHeal = size.height - (slice.heal * heightPerValue);
+          canvas.drawCircle(Offset(x, yHeal), 4, Paint()..color = Colors.green);
+        }
+        if (showTaken) {
+          final yTaken = size.height - (slice.taken * heightPerValue);
+          canvas.drawCircle(Offset(x, yTaken), 4, Paint()..color = Colors.orange);
+        }
       }
     }
   }

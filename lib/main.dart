@@ -616,59 +616,57 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
     return Material(
       color: Colors.transparent,
-      child: GestureDetector(
-        onPanStart: (details) async {
-          _isDragging = false;
-          try {
-            final pos = await FlutterOverlayWindow.getOverlayPosition();
-            _windowX = pos.x;
-            _windowY = pos.y;
+      child: Container(
+        decoration: _windowDecoration,
+        child: PlayerDetailCard(
+          playerInfo: playerInfo,
+          dpsData: dpsData,
+          dpsValue: dpsValue,
+          hpsValue: hpsValue,
+          takenDpsValue: takenDpsValue,
+          isMe: isMe,
+          onClose: () async {
+            // Restore original window size before closing detail
+            await _restoreOriginalSize();
+            setState(() {
+              _selectedPlayerUid = null;
+            });
+          },
+          onDragStart: (details) async {
+            _isDragging = false;
+            try {
+              final pos = await FlutterOverlayWindow.getOverlayPosition();
+              _windowX = pos.x;
+              _windowY = pos.y;
+              _lastMoveX = details.globalPosition.dx;
+              _lastMoveY = details.globalPosition.dy;
+              _windowDeltaX = 0;
+              _windowDeltaY = 0;
+              _isDragging = true;
+            } catch (e) {
+              debugPrint("Error getting overlay position: $e");
+            }
+          },
+          onDragUpdate: (details) {
+            if (!_isDragging) return;
+            final dpr = MediaQuery.of(context).devicePixelRatio;
+            
+            _windowDeltaX = details.globalPosition.dx - _lastMoveX;
+            _windowDeltaY = details.globalPosition.dy - _lastMoveY;
+            
+            _windowX += _windowDeltaX / dpr;
+            _windowY += _windowDeltaY / dpr;
             _lastMoveX = details.globalPosition.dx;
             _lastMoveY = details.globalPosition.dy;
-            _windowDeltaX = 0;
-            _windowDeltaY = 0;
-            _isDragging = true;
-          } catch (e) {
-            debugPrint("Error getting overlay position: $e");
-          }
-        },
-        onPanUpdate: (details) {
-          if (!_isDragging) return;
-          final dpr = MediaQuery.of(context).devicePixelRatio;
-          
-          _windowDeltaX = details.globalPosition.dx - _lastMoveX;
-          _windowDeltaY = details.globalPosition.dy - _lastMoveY;
-          
-          _windowX += _windowDeltaX / dpr;
-          _windowY += _windowDeltaY / dpr;
-          _lastMoveX = details.globalPosition.dx;
-          _lastMoveY = details.globalPosition.dy;
-          
-          FlutterOverlayWindow.moveOverlay(
-            OverlayPosition(_windowX, _windowY),
-          );
-        },
-        onPanEnd: (details) {
-          _isDragging = false;
-          _savePosition();
-        },
-        child: Container(
-          decoration: _windowDecoration,
-          child: PlayerDetailCard(
-            playerInfo: playerInfo,
-            dpsData: dpsData,
-            dpsValue: dpsValue,
-            hpsValue: hpsValue,
-            takenDpsValue: takenDpsValue,
-            isMe: isMe,
-            onClose: () async {
-              // Restore original window size before closing detail
-              await _restoreOriginalSize();
-              setState(() {
-                _selectedPlayerUid = null;
-              });
-            },
-          ),
+            
+            FlutterOverlayWindow.moveOverlay(
+              OverlayPosition(_windowX, _windowY),
+            );
+          },
+          onDragEnd: (details) {
+            _isDragging = false;
+            _savePosition();
+          },
         ),
       ),
     );
