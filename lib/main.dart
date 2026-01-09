@@ -198,15 +198,36 @@ class _OverlayWidgetState extends State<OverlayWidget>
       );
 
   Widget _buildMinimized() {
+    // Determine keys based on tab index
+    // Default to DPS if controller not ready
+    int tabIndex = 0;
+    try {
+      if (_tabController.length > 0) {
+        tabIndex = _tabController.index;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    String rateKey = 'dps';
+    String totalKey = 'total';
+    if (tabIndex == 1) { // Taken (matches TabBarView order)
+      rateKey = 'takenDps';
+      totalKey = 'totalTaken';
+    } else if (tabIndex == 2) { // Heal
+      rateKey = 'hps';
+      totalKey = 'totalHeal';
+    }
+
     // Calculate Rank
     var filtered = _players.where((p) {
-      final total = (p['total'] as num?)?.toDouble() ?? 0.0;
+      final total = (p[totalKey] as num?)?.toDouble() ?? 0.0;
       return total > 0;
     }).toList();
 
     filtered.sort((a, b) {
-      final valA = (a['dps'] as num?)?.toDouble() ?? 0.0;
-      final valB = (b['dps'] as num?)?.toDouble() ?? 0.0;
+      final valA = (a[totalKey] as num?)?.toDouble() ?? 0.0;
+      final valB = (b[totalKey] as num?)?.toDouble() ?? 0.0;
       return valB.compareTo(valA);
     });
 
@@ -217,7 +238,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
       (p) => p['isMe'] == true,
       orElse: () => {},
     );
-    final myDps = (myData['dps'] as num?)?.toDouble() ?? 0.0;
+    final myVal = (myData[rateKey] as num?)?.toDouble() ?? 0.0;
 
     return Material(
       color: Colors.transparent,
@@ -299,7 +320,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
               ),
               Expanded(
                 child: Text(
-                  _formatNumber(myDps),
+                  _formatNumber(myVal),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     color: Colors.white,
@@ -1082,15 +1103,15 @@ class _PlayerListState extends State<PlayerList> {
 
     // Sort
     filtered.sort((a, b) {
-      final valA = (a[rateKey] as num?)?.toDouble() ?? 0.0;
-      final valB = (b[rateKey] as num?)?.toDouble() ?? 0.0;
+      final valA = (a[totalKey] as num?)?.toDouble() ?? 0.0;
+      final valB = (b[totalKey] as num?)?.toDouble() ?? 0.0;
       return valB.compareTo(valA);
     });
 
     // Calculate Max for Progress Bar
     double maxVal = 0.0;
     if (filtered.isNotEmpty) {
-      maxVal = (filtered.first[rateKey] as num?)?.toDouble() ?? 0.0;
+      maxVal = (filtered.first[totalKey] as num?)?.toDouble() ?? 0.0;
     }
     if (maxVal == 0) maxVal = 1.0;
 
@@ -1143,7 +1164,7 @@ class _PlayerListState extends State<PlayerList> {
     final cls = Classes.fromId(p['classId']);
     final val = (p[rateKey] as num?)?.toDouble() ?? 0.0;
     final total = (p[totalKey] as num?)?.toInt() ?? 0;
-    final percent = (val / maxVal).clamp(0.0, 1.0);
+    final percent = (total / maxVal).clamp(0.0, 1.0);
 
     String name = p['name']?.toString() ?? "Unknown";
     if (p['isMe'] == true && (name == "Unknown" || name.isEmpty)) {
