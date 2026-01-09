@@ -211,12 +211,16 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
     String rateKey = 'dps';
     String totalKey = 'total';
+    IconData headerIcon = Icons.flash_on;
+
     if (tabIndex == 1) { // Taken (matches TabBarView order)
       rateKey = 'takenDps';
       totalKey = 'totalTaken';
+      headerIcon = Icons.shield;
     } else if (tabIndex == 2) { // Heal
       rateKey = 'hps';
       totalKey = 'totalHeal';
+      headerIcon = Icons.local_hospital;
     }
 
     // Calculate Rank
@@ -305,7 +309,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.flash_on, size: 16, color: Colors.blue),
+                  Icon(headerIcon, size: 16, color: Colors.blue),
                   const SizedBox(width: 4),
                   if (myRank > 0)
                     Text(
