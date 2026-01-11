@@ -11,6 +11,8 @@ class PlayerInfo {
   int? lucky;
   Int64? maxHp;
   Int64? hp;
+  Map<String, double>? position;
+  Map<String, double>? rotation;
 
   PlayerInfo({
     required this.uid,
@@ -23,6 +25,8 @@ class PlayerInfo {
     this.lucky,
     this.maxHp,
     this.hp,
+    this.position,
+    this.rotation,
   });
 
   @override

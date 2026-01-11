@@ -434,14 +434,66 @@ class Entity extends GeneratedMessage {
   void clearEntType() => clearField(2);
 
   AttrCollection get attrs => $_getN(2);
-  set attrs(AttrCollection v) { setField(4, v); }
+  set attrs(AttrCollection v) { setField(3, v); }
   bool hasAttrs() => $_has(2);
-  void clearAttrs() => clearField(4);
+  void clearAttrs() => clearField(3);
+}
+
+class EDisappearType extends ProtobufEnum {
+  static const EDisappearType normal = EDisappearType._(0, 'Normal');
+  static const EDisappearType dead = EDisappearType._(1, 'Dead');
+  static const EDisappearType destroy = EDisappearType._(2, 'Destroy');
+  static const EDisappearType transferLeave = EDisappearType._(3, 'TransferLeave');
+  static const EDisappearType transferPassLineLeave = EDisappearType._(4, 'TransferPassLineLeave');
+
+  static const List<EDisappearType> values = <EDisappearType> [
+    normal, dead, destroy, transferLeave, transferPassLineLeave,
+  ];
+
+  static final Map<int, EDisappearType> _byValue = ProtobufEnum.initByValue(values);
+  static EDisappearType? valueOf(int value) => _byValue[value];
+
+  const EDisappearType._(super.v, super.n);
+}
+
+class DisappearEntity extends GeneratedMessage {
+  static final BuilderInfo _i = BuilderInfo('DisappearEntity', package: const PackageName('BlueProto'), createEmptyInstance: create)
+    ..aInt64(1, 'uuid')
+    ..e<EDisappearType>(2, 'type', PbFieldType.OE, defaultOrMaker: EDisappearType.normal, valueOf: EDisappearType.valueOf, enumValues: EDisappearType.values)
+    ..hasRequiredFields = false;
+
+  DisappearEntity() : super();
+  DisappearEntity.fromBuffer(List<int> i, [ExtensionRegistry r = ExtensionRegistry.EMPTY]) : super() {
+    mergeFromBuffer(i, r);
+  }
+  
+  @override
+  DisappearEntity clone() => DisappearEntity()..mergeFromMessage(this);
+  @override
+  DisappearEntity createEmptyInstance() => create();
+  @override
+  BuilderInfo get info_ => _i;
+
+  static DisappearEntity create() => DisappearEntity();
+  static PbList<DisappearEntity> createRepeated() => PbList<DisappearEntity>();
+  static DisappearEntity getDefault() => _defaultInstance ??= create()..freeze();
+  static DisappearEntity? _defaultInstance;
+
+  Int64 get uuid => $_getI64(0);
+  set uuid(Int64 v) { $_setInt64(0, v); }
+  bool hasUuid() => $_has(0);
+  void clearUuid() => clearField(1);
+
+  EDisappearType get type => $_getN(1);
+  set type(EDisappearType v) { setField(2, v); }
+  bool hasType() => $_has(1);
+  void clearType() => clearField(2);
 }
 
 class SyncNearEntities extends GeneratedMessage {
   static final BuilderInfo _i = BuilderInfo('SyncNearEntities', package: const PackageName('BlueProto'), createEmptyInstance: create)
     ..pc<Entity>(1, 'appear', PbFieldType.PM, subBuilder: Entity.create)
+    ..pc<DisappearEntity>(2, 'disappear', PbFieldType.PM, subBuilder: DisappearEntity.create)
     ..hasRequiredFields = false;
 
   SyncNearEntities() : super();
@@ -462,6 +514,7 @@ class SyncNearEntities extends GeneratedMessage {
   static SyncNearEntities? _defaultInstance;
 
   List<Entity> get appear => $_getList(0);
+  List<DisappearEntity> get disappear => $_getList(1);
 }
 
 class CharBase extends GeneratedMessage {

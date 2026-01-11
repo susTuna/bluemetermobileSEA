@@ -1,10 +1,12 @@
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart';
 import 'package:protobuf/protobuf.dart';
+import 'dart:typed_data';
 
 import '../../protocol/blue_protocol.dart';
 import '../../models/attr_type.dart';
 import '../../state/data_storage.dart';
+import '../../tools/attr_parser.dart';
 import 'message_processor.dart';
 
 class SyncNearEntitiesProcessor implements IMessageProcessor {
@@ -16,30 +18,120 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
   void process(Uint8List payload) {
     try {
       final syncNearEntities = SyncNearEntities.fromBuffer(payload);
-      if (syncNearEntities.appear.isEmpty) return;
+      
+      if (syncNearEntities.appear.isNotEmpty) {
+        for (var entity in syncNearEntities.appear) {
+          if (entity.entType != EEntityType.entChar && entity.entType != EEntityType.entMonster) continue;
 
-      for (var entity in syncNearEntities.appear) {
-        // Also process entMonster if needed, but for now we focus on players.
-        // Wait, SyncNearEntities also sends "Me" sometimes? Or just others?
-        // Usually "Me" is SyncContainerData. But maybe in some cases...
-        
-        if (entity.entType != EEntityType.entChar) continue;
+          final uid = entity.uuid >> 16;
+          if (uid == Int64.ZERO) continue;
+          
+          final attrCollection = entity.attrs;
+          if (attrCollection.attrs.isEmpty) continue;
 
-        final playerUid = entity.uuid >> 16;
-        if (playerUid == Int64.ZERO) continue;
-        
-        // Check if this is "Me"
-        if (playerUid == _storage.currentPlayerUuid) {
-           debugPrint("[BM] SyncNearEntities found ME ($playerUid)");
+          if (entity.entType == EEntityType.entChar) {
+            _processPlayerAttrs(uid, attrCollection.attrs);
+          } else if (entity.entType == EEntityType.entMonster) {
+            _processMonsterAttrs(uid, attrCollection.attrs);
+          }
         }
+      }
 
-        final attrCollection = entity.attrs;
-        if (attrCollection.attrs.isEmpty) continue;
-
-        _processPlayerAttrs(playerUid, attrCollection.attrs);
+      if (syncNearEntities.disappear.isNotEmpty) {
+        for (var entity in syncNearEntities.disappear) {
+           final uid = entity.uuid >> 16;
+           if (uid == Int64.ZERO) continue;
+           
+           // We don't know the type, so try removing from both
+           _storage.removeMonster(uid);
+           _storage.removePlayer(uid);
+        }
       }
     } catch (e) {
       debugPrint("Error processing SyncNearEntities: $e");
+    }
+  }
+
+  void _processMonsterAttrs(Int64 uid, List<Attr> attrs) {
+    // Temporary storage to validate entity before creation
+    Map<String, double>? pos;
+    Map<String, double>? rot;
+    String? name;
+    int? level;
+    Int64? hp;
+    Int64? maxHp;
+    int? templateId;
+
+    for (var attr in attrs) {
+      if (attr.id == 0 || attr.rawData.isEmpty) continue;
+      
+      // Handle complex types via AttrParser
+      if (attr.id == 52) { // AttrPos
+         final val = AttrParser.parse(52, attr.rawData);
+         if (val is Map<String, dynamic>) {
+           pos = val.map((k, v) => MapEntry(k, (v as num).toDouble()));
+         }
+         continue;
+      }
+      if (attr.id == 374) { // AttrRotation
+         final val = AttrParser.parse(374, attr.rawData);
+         if (val is Map<String, dynamic>) {
+           rot = val.map((k, v) => MapEntry(k, (v as num).toDouble()));
+         }
+         continue;
+      }
+      if (attr.id == 11320) { // AttrMaxHp
+        final val = AttrParser.parse(11320, attr.rawData);
+        if (val is Int64) maxHp = val;
+        else if (val is int) maxHp = Int64(val);
+        continue;
+      }
+      if (attr.id == 11310) { // AttrHp
+        final val = AttrParser.parse(11310, attr.rawData);
+        if (val is Int64) hp = val;
+        else if (val is int) hp = Int64(val);
+        continue;
+      }
+
+      // Handle primitives via Reader
+      final reader = CodedBufferReader(attr.rawData);
+      final attrType = AttrType.fromId(attr.id);
+
+      try {
+        switch (attrType) {
+          case AttrType.attrName: // 1
+            name = reader.readString();
+            break;
+          case AttrType.attrLevel: // 10000
+            level = reader.readInt32();
+            break;
+          case AttrType.attrId: // Template ID (10)
+             templateId = reader.readInt32();
+             break;
+          default:
+            break;
+        }
+      } catch (e) {
+        // Ignore read errors
+      }
+    }
+
+    // Filter: Only add if it looks like a real monster
+    // Should have Position AND (MaxHP > 0 OR Level > 0 OR Name != null)
+    // Objects/Gatherables often lack Battle Stats.
+    if ((maxHp != null && maxHp > Int64.ZERO) || 
+        (level != null && level > 0) || 
+        (name != null && name.isNotEmpty)) {
+       
+       _storage.ensureMonster(uid);
+       
+       if (pos != null) _storage.setMonsterPosition(uid, pos);
+       if (rot != null) _storage.setMonsterRotation(uid, rot);
+       if (name != null) _storage.setMonsterName(uid, name);
+       if (level != null) _storage.setMonsterLevel(uid, level);
+       if (hp != null) _storage.setMonsterHp(uid, hp);
+       if (maxHp != null) _storage.setMonsterMaxHp(uid, maxHp);
+       if (templateId != null) _storage.setMonsterTemplateId(uid, templateId);
     }
   }
 
@@ -49,50 +141,59 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
     for (var attr in attrs) {
       if (attr.id == 0 || attr.rawData.isEmpty) continue;
       
-      // Attr rawData is a serialized value, we need to read it.
-      // In C# it uses CodedInputStream. In Dart we can use ByteReader or CodedBufferReader.
-      // Since rawData is just bytes, and we know the type based on ID.
-      // Most are int32 or string.
+      // Handle complex types first
+      if (attr.id == 52) { // AttrPos
+         final val = AttrParser.parse(52, attr.rawData);
+         if (val is Map<String, double>) {
+           _storage.setPlayerPosition(playerUid, val);
+         }
+         continue;
+      }
+      if (attr.id == 374) { // AttrRotation
+         final val = AttrParser.parse(374, attr.rawData);
+         if (val is Map<String, double>) {
+           _storage.setPlayerRotation(playerUid, val);
+         }
+         continue;
+      }
+      if (attr.id == 11320) { // AttrMaxHp
+        // Try reading as Int32/Int64 via parser or reader
+         final reader = CodedBufferReader(attr.rawData);
+         try {
+            _storage.setPlayerMaxHp(playerUid, reader.readInt64().toInt());
+         } catch (_) {
+            // Fallback
+         }
+         continue;
+      }
       
       final reader = CodedBufferReader(attr.rawData);
-      
-      // Note: CodedBufferReader.readString() / readInt32() might expect tag? 
-      // No, in C# `reader.ReadString()` reads a length-prefixed string.
-      // `reader.ReadInt32()` reads a varint.
-      // Protobuf's CodedInputStream in C# reads values directly if initialized with the array.
-      
       final attrType = AttrType.fromId(attr.id);
       if (attrType == AttrType.unknown) continue;
 
-      switch (attrType) {
-        case AttrType.attrName:
-          final name = reader.readString();
-          debugPrint("[BM] SyncNearEntities Name Update for $playerUid: $name");
-          _storage.setPlayerName(playerUid, name);
-          break;
-        case AttrType.attrProfessionId:
-          _storage.setPlayerProfessionId(playerUid, reader.readInt32());
-          break;
-        case AttrType.attrFightPoint:
-          _storage.setPlayerCombatPower(playerUid, reader.readInt32());
-          break;
-        case AttrType.attrLevel:
-          _storage.setPlayerLevel(playerUid, reader.readInt32());
-          break;
-        case AttrType.attrRankLevel:
-          // _storage.setPlayerRankLevel(playerUid, reader.readInt32());
-          break;
-        case AttrType.attrCri:
-          // _storage.setPlayerCritical(playerUid, reader.readInt32());
-          break;
-        case AttrType.attrLucky:
-          // _storage.setPlayerLucky(playerUid, reader.readInt32());
-          break;
-        case AttrType.attrHp:
-          _storage.setPlayerHp(playerUid, reader.readInt32().toInt());
-          break;
-        default:
-          break;
+      try {
+        switch (attrType) {
+          case AttrType.attrName:
+            final name = reader.readString();
+            _storage.setPlayerName(playerUid, name);
+            break;
+          case AttrType.attrProfessionId:
+            _storage.setPlayerProfessionId(playerUid, reader.readInt32());
+            break;
+          case AttrType.attrFightPoint:
+            _storage.setPlayerCombatPower(playerUid, reader.readInt32());
+            break;
+          case AttrType.attrLevel:
+            _storage.setPlayerLevel(playerUid, reader.readInt32());
+            break;
+          case AttrType.attrHp:
+            _storage.setPlayerHp(playerUid, reader.readInt32());
+            break;
+          default:
+            break;
+        }
+      } catch (e) {
+        // Ignore read errors for individual attributes
       }
     }
   }

@@ -7,6 +7,7 @@ import '../../models/attr_type.dart';
 import '../../services/logger_service.dart';
 import '../../state/data_storage.dart';
 import '../../tools/entity_utils.dart';
+import '../../tools/attr_parser.dart';
 import 'message_processor.dart';
 
 abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
@@ -23,36 +24,96 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
 
     final isTargetPlayer = EntityUtils.isUuidPlayerRaw(targetUuidRaw);
     final targetUuid = EntityUtils.getPlayerUid(targetUuidRaw);
+    final isTargetMonster = !isTargetPlayer && _storage.monsterInfoDatas.containsKey(targetUuid);
+
+    bool hpUpdated = false;
 
     // Process Attributes
-    if (delta.hasAttrs() && isTargetPlayer) {
+    if (delta.hasAttrs()) {
       final attrCollection = delta.attrs;
-      if (attrCollection.attrs.isNotEmpty) {
-        _storage.ensurePlayer(targetUuid);
+      if (attrCollection.attrs.isNotEmpty && (isTargetPlayer || isTargetMonster)) {
+        if (isTargetPlayer) _storage.ensurePlayer(targetUuid);
+        if (isTargetMonster) _storage.ensureMonster(targetUuid);
 
         for (var attr in attrCollection.attrs) {
           if (attr.id == 0 || attr.rawData.isEmpty) continue;
+
+          // Handle Position (52)
+          if (attr.id == 52) {
+            final val = AttrParser.parse(52, attr.rawData);
+            if (val is Map<String, double>) {
+              if (isTargetPlayer) {
+                _storage.setPlayerPosition(targetUuid, val);
+              } else {
+                _storage.setMonsterPosition(targetUuid, val);
+              }
+            }
+            continue;
+          }
+
+          // Handle Rotation (374)
+          if (attr.id == 374) {
+            final val = AttrParser.parse(374, attr.rawData);
+            if (val is Map<String, double>) {
+              if (isTargetPlayer) {
+                _storage.setPlayerRotation(targetUuid, val);
+              } else {
+                _storage.setMonsterRotation(targetUuid, val);
+              }
+            }
+            continue;
+          }
+
+          // if (!isTargetPlayer) continue; // Removed to allow monster updates
+
           final reader = CodedBufferReader(attr.rawData);
           final attrType = AttrType.fromId(attr.id);
 
-          switch (attrType) {
-            case AttrType.attrName:
-              _storage.setPlayerName(targetUuid, reader.readString());
-              break;
-            case AttrType.attrProfessionId:
-              _storage.setPlayerProfessionId(targetUuid, reader.readInt32());
-              break;
-            case AttrType.attrFightPoint:
-              _storage.setPlayerCombatPower(targetUuid, reader.readInt32());
-              break;
-            case AttrType.attrLevel:
-              _storage.setPlayerLevel(targetUuid, reader.readInt32());
-              break;
-            case AttrType.attrHp:
-              _storage.setPlayerHp(targetUuid, reader.readInt32().toInt());
-              break;
-            default:
-              break;
+          // For generic attributes, check who they belong to
+          try {
+            switch (attrType) {
+              case AttrType.attrName:
+                if (isTargetPlayer) _storage.setPlayerName(targetUuid, reader.readString());
+                break;
+              case AttrType.attrProfessionId:
+                if (isTargetPlayer) _storage.setPlayerProfessionId(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrFightPoint:
+                if (isTargetPlayer) _storage.setPlayerCombatPower(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrLevel:
+                if (isTargetPlayer) _storage.setPlayerLevel(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrHp:
+                hpUpdated = true;
+                final hpParsed = AttrParser.parse(11310, attr.rawData);
+                int hpVal = 0;
+                if (hpParsed is Int64) hpVal = hpParsed.toInt();
+                else if (hpParsed is int) hpVal = hpParsed;
+                
+                if (isTargetPlayer) {
+                  _storage.setPlayerHp(targetUuid, hpVal);
+                } else if (isTargetMonster) {
+                  _storage.setMonsterHp(targetUuid, Int64(hpVal));
+                }
+                break;
+             case AttrType.attrMaxHp: // Handle MaxHP updates too (11320)
+                final maxHpParsed = AttrParser.parse(11320, attr.rawData);
+                int maxHpVal = 0;
+                if (maxHpParsed is Int64) maxHpVal = maxHpParsed.toInt();
+                else if (maxHpParsed is int) maxHpVal = maxHpParsed;
+
+                if (isTargetPlayer) {
+                   _storage.setPlayerMaxHp(targetUuid, maxHpVal);
+                } else if (isTargetMonster) {
+                   _storage.setMonsterMaxHp(targetUuid, Int64(maxHpVal));
+                }
+                break;
+              default:
+                break;
+            }
+          } catch (_) {
+            // Ignore read errors
           }
         }
       }
@@ -133,6 +194,12 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
              // Handle Damage
              
              if (d.type == EDamageType.normal || d.type == EDamageType.miss) { 
+                // Speculatively update Monster HP locally if target is a monster
+                // AND if HP wasn't already updated by an attribute in this packet (to prevent double counting)
+                if (isTargetMonster && !hpUpdated) {
+                  _storage.decreaseMonsterHp(targetUuid, damageValue);
+                }
+
                 if (isAttackerPlayer || isTargetPlayer) {
                   _storage.addDamage(
                     attackerUuid, 
@@ -162,13 +229,39 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
         final deltaInfo = msg.deltaInfo;
         final uuidRaw = deltaInfo.uuid;
         
-        // Shift the UUID to get the player UID (consistent with other processors)
+        // Shift the UUID to get the player UID
         final playerUid = EntityUtils.getPlayerUid(uuidRaw);
         
         if (playerUid != Int64.ZERO && _storage.currentPlayerUuid != playerUid) {
           _storage.currentPlayerUuid = playerUid;
           _storage.ensurePlayer(playerUid);
           _logger.log("SyncToMeDeltaInfo - Set currentPlayerUuid to: $playerUid (from raw: $uuidRaw)");
+          
+          // If PlayerUID changed, it likely means a login or character switch.
+          // Clear current monsters to avoid stale data.
+          _storage.clearMonsters();
+        }
+
+        // Detect teleport / Map change via big position jump?
+        // Check if we have position in baseDelta
+        if (deltaInfo.hasBaseDelta() && deltaInfo.baseDelta.hasAttrs()) {
+           for (var attr in deltaInfo.baseDelta.attrs.attrs) {
+             if (attr.id == 52) { // AttrPos
+               final val = AttrParser.parse(52, attr.rawData);
+               if (val is Map<String, double>) {
+                 final oldPos = _storage.playerInfoDatas[playerUid]?.position;
+                 if (oldPos != null) {
+                   final dist = _calculateDist(oldPos, val);
+                   // If jump > 500 units, clear monsters
+                   // User reported issues with "3m" residue.
+                   // If units are Meters, 500m is a good threshold for teleport.
+                   if (dist > 250000) { // 500 squared
+                     _storage.clearMonsters();
+                   }
+                 }
+               }
+             }
+           }
         }
 
         if (deltaInfo.hasBaseDelta()) {
@@ -178,6 +271,13 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
     } catch (e) {
       _logger.error("Error processing SyncToMeDeltaInfo", error: e);
     }
+  }
+
+  double _calculateDist(Map<String, double> p1, Map<String, double> p2) {
+    final dx = (p1['x'] ?? 0) - (p2['x'] ?? 0);
+    final dy = (p1['y'] ?? 0) - (p2['y'] ?? 0);
+    final dz = (p1['z'] ?? 0) - (p2['z'] ?? 0);
+    return (dx * dx + dy * dy + dz * dz); // Squared distance for perf
   }
 }
 

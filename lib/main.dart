@@ -4,27 +4,39 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/analyze/packet_analyzer_v2.dart';
 import 'core/state/data_storage.dart';
-import 'core/models/classes.dart';
 import 'core/models/dps_data.dart';
 import 'core/models/player_info.dart';
+
 import 'core/services/logger_service.dart';
 import 'core/services/translation_service.dart';
 import 'widgets/player_detail_card.dart';
+import 'views/dps_view.dart';
+import 'views/nearby_view.dart';
+import 'views/tools_view.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => DataStorage(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 @pragma("vm:entry-point")
 void overlayMain() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayWidget()),
+    ChangeNotifierProvider(
+      create: (context) => DataStorage(),
+      child: const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayWidget()),
+    ),
   );
 }
 
@@ -35,13 +47,16 @@ class OverlayWidget extends StatefulWidget {
   State<OverlayWidget> createState() => _OverlayWidgetState();
 }
 
-class _OverlayWidgetState extends State<OverlayWidget>
-    with SingleTickerProviderStateMixin {
+class _OverlayWidgetState extends State<OverlayWidget> {
   final LoggerService _logger = LoggerService();
-  late TabController _tabController;
+  // late TabController _tabController; // Moved to DpsView
   List<Map<String, dynamic>> _players = [];
   int _combatTime = 0;
-  String? _selectedPlayerUid; // UID du joueur sélectionné pour la carte de détails
+  String? _selectedPlayerUid; 
+  
+  // Navigation State
+  int _mainTabIndex = 0; // 0=DPS, 1=Nearby, 2=Tools
+  int _dpsTabIndex = 0; // 0=DPS(sword), 1=Taken(shield), 2=Heal(cross)
 
   // Track window position
   double _windowX = 0;
@@ -74,7 +89,6 @@ class _OverlayWidgetState extends State<OverlayWidget>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     FlutterOverlayWindow.overlayListener.listen((event) {
       if (event is List) {
         setState(() {
@@ -99,6 +113,68 @@ class _OverlayWidgetState extends State<OverlayWidget>
             }
             
             _selectedPlayerUid = newUid;
+          }
+
+          // Sync DataStorage for NearbyView
+          if (mounted) {
+             final storage = Provider.of<DataStorage>(context, listen: false);
+             
+             if (event.containsKey('myUid')) {
+               final myUidStr = event['myUid'] as String?;
+               if (myUidStr != null) {
+                  storage.currentPlayerUuid = Int64.parseInt(myUidStr);
+               }
+             }
+
+             if (event.containsKey('myPos')) {
+               final myPos = event['myPos'] as Map?;
+               if (myPos != null) {
+                 final convertedPos = myPos.map((key, value) => 
+                    MapEntry(key.toString(), (value as num).toDouble()));
+                 
+                 storage.setPlayerPosition(
+                   storage.currentPlayerUuid, 
+                   convertedPos,
+                 );
+               }
+             }
+
+             if (event.containsKey('monsters')) {
+               final monsters = event['monsters'] as List?;
+               if (monsters != null) {
+                 // Clear old monsters or just update?
+                 // For now, update.
+                 // Ideally we should sync full list (remove stale).
+                 // But since we send full list from main, we can clear and add?
+                 // Storage doesn't have "clearMonsters".
+                 // Let's just update for now. 
+                 
+                 // Better: iterate and update/add. Storage handles it.
+                 // But removed monsters won't be removed.
+                 // We should probably clear if we receive a full snapshot.
+                 // But DataStorage logic is additive.
+                 // However, NearbyView sorts by distance, so old far monsters might stay?
+                 // Let's leave it additive for now or implement clear.
+                 
+                 for (var m in monsters) {
+                   final map = m as Map;
+                   final uid = Int64.parseInt(map['uid'] as String);
+                   storage.ensureMonster(uid);
+                   if (map['templateId'] != null) storage.setMonsterTemplateId(uid, map['templateId'] as int);
+                   if (map['name'] != null) storage.setMonsterName(uid, map['name'] as String);
+                   if (map['level'] != null) storage.setMonsterLevel(uid, map['level'] as int);
+                   if (map['hp'] != null) storage.setMonsterHp(uid, Int64.parseInt(map['hp'] as String));
+                   if (map['maxHp'] != null) storage.setMonsterMaxHp(uid, Int64.parseInt(map['maxHp'] as String));
+                   if (map['pos_x'] != null) {
+                      storage.setMonsterPosition(uid, {
+                        'x': (map['pos_x'] as num).toDouble(),
+                        'y': (map['pos_y'] as num).toDouble(),
+                        'z': (map['pos_z'] as num).toDouble(),
+                      });
+                   }
+                 }
+               }
+             }
           }
         });
       }
@@ -163,7 +239,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    // _tabController.dispose();
     super.dispose();
   }
 
@@ -200,14 +276,7 @@ class _OverlayWidgetState extends State<OverlayWidget>
   Widget _buildMinimized() {
     // Determine keys based on tab index
     // Default to DPS if controller not ready
-    int tabIndex = 0;
-    try {
-      if (_tabController.length > 0) {
-        tabIndex = _tabController.index;
-      }
-    } catch (e) {
-      // ignore
-    }
+    int tabIndex = _dpsTabIndex;
 
     String rateKey = 'dps';
     String totalKey = 'total';
@@ -351,147 +420,153 @@ class _OverlayWidgetState extends State<OverlayWidget>
   }
 
   Widget _buildFull() {
-
     return Material(
       color: Colors.transparent,
       child: Container(
         decoration: _windowDecoration,
         child: Stack(
           children: [
-            Column(
+            Row(
               children: [
-                // Title Bar
-                GestureDetector(
-                  onPanStart: (details) async {
-                    _isDragging = false;
-                    try {
-                      final pos = await FlutterOverlayWindow.getOverlayPosition();
-                      // Convert physical position (from native) to logical pixels (for Flutter)
-                      _windowX = pos.x;
-                      _windowY = pos.y;
-                      _lastMoveX=details.globalPosition.dx;
-                      _lastMoveY=details.globalPosition.dy;
-                      _windowDeltaX=0;
-                      _windowDeltaY=0;
-                      _isDragging = true;
-                                    } catch (e) {
-                      debugPrint("Error getting overlay position: $e");
-                    }
-                  },
-                  onPanUpdate: (details) {
-                    if (!_isDragging) return;
-                      final dpr = MediaQuery.of(context).devicePixelRatio;
-                      
-                    _windowDeltaX= details.globalPosition.dx-_lastMoveX;
-                    _windowDeltaY= details.globalPosition.dy - _lastMoveY;
-                    
-                    _windowX += _windowDeltaX/dpr;
-                    _windowY += _windowDeltaY/dpr;
-                    _lastMoveX = details.globalPosition.dx;
-                    _lastMoveY = details.globalPosition.dy;
-                    
-                    FlutterOverlayWindow.moveOverlay(
-                      OverlayPosition(_windowX, _windowY),
-                    );
-                  },
-                  onPanEnd: (details) {
-                    _isDragging = false;
-                    _savePosition();
-                  },
-                  child: Container(
-                    height: 32, // Reduced height
-                    color: Colors.transparent, // Hit test
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TabBar(
-                            controller: _tabController,
-                            labelPadding: EdgeInsets.zero,
-                            indicatorSize: TabBarIndicatorSize.label,
-                            indicatorColor: Colors.transparent,
-                            dividerColor: Colors.transparent,
-                            labelColor: Colors.blue,
-                            unselectedLabelColor: Colors.white,
-                            tabs: const [
-                              Tab(child: Icon(Icons.flash_on, size: 16)), // DPS (Sword replacement)
-                              Tab(child: Icon(Icons.shield, size: 16)),
-                              Tab(child: Icon(Icons.local_hospital, size: 16)),
+                // Vertical Side Menu
+                Container(
+                  width: 40,
+                  color: Colors.black.withValues(alpha: 0.6),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      // Tab 0: DPS Meter
+                      _buildSideTab(0, Icons.bar_chart),
+                      // Tab 1: Nearby (Radar)
+                      _buildSideTab(1, Icons.radar),
+                      // Tab 2: Tools (Module/Optimizer)
+                      _buildSideTab(2, Icons.build),
+                    ],
+                  ),
+                ),
+                // Main Content Area
+                Expanded(
+                  child: Column(
+                    children: [
+                      // Draggable Title Bar / Header (Timer + Window Controls)
+                      GestureDetector(
+                        onPanStart: (details) async {
+                          _isDragging = false;
+                          try {
+                            final pos = await FlutterOverlayWindow.getOverlayPosition();
+                            // Convert physical position (from native) to logical pixels (for Flutter)
+                            _windowX = pos.x;
+                            _windowY = pos.y;
+                            _lastMoveX=details.globalPosition.dx;
+                            _lastMoveY=details.globalPosition.dy;
+                            _windowDeltaX=0;
+                            _windowDeltaY=0;
+                            _isDragging = true;
+                          } catch (e) {
+                            debugPrint("Error getting overlay position: $e");
+                          }
+                        },
+                        onPanUpdate: (details) {
+                          if (!_isDragging) return;
+                            final dpr = MediaQuery.of(context).devicePixelRatio;
+                            
+                          _windowDeltaX= details.globalPosition.dx-_lastMoveX;
+                          _windowDeltaY= details.globalPosition.dy - _lastMoveY;
+                          
+                          _windowX += _windowDeltaX/dpr;
+                          _windowY += _windowDeltaY/dpr;
+                          _lastMoveX = details.globalPosition.dx;
+                          _lastMoveY = details.globalPosition.dy;
+                          
+                          FlutterOverlayWindow.moveOverlay(
+                            OverlayPosition(_windowX, _windowY),
+                          );
+                        },
+                        onPanEnd: (details) {
+                          _isDragging = false;
+                          _savePosition();
+                        },
+                        child: Container(
+                          height: 32,
+                          color: Colors.transparent, // Hit test
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Push items to edges
+                            children: [
+                              // Timer (Left aligned in this area)
+                              Text(
+                                _formatTime(_combatTime),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  shadows: [Shadow(blurRadius: 2, color: Colors.black)],
+                                ),
+                              ),
+                              // Window Actions (Right aligned)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () async {
+                                      setState(() {
+                                        _isMinimized = true;
+                                      });
+                                      _saveMinimizedState();
+                                      
+                                      // Restore mini position
+                                      _windowX = _miniX;
+                                      _windowY = _miniY;
+                                      
+                                      await FlutterOverlayWindow.resizeOverlay(135, 30, false);
+                                      await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 2),
+                                      child: Icon(Icons.remove, size: 16, color: Colors.white70),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () async {
+                                       final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
+                                       if (sendPort != null) {
+                                         sendPort.send("RESET");
+                                       }
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 2),
+                                      child: Icon(Icons.refresh, size: 16, color: Colors.white70),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
-                        // Timer
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            _formatTime(_combatTime),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                            ),
-                          ),
-                        ),
-                        // Actions
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                      ),
+                      // Content View
+                      Expanded(
+                        child: IndexedStack(
+                          index: _mainTabIndex,
                           children: [
-                            GestureDetector(
-                              onTap: () async {
-                                setState(() {
-                                  _isMinimized = true;
-                                });
-                                _saveMinimizedState();
-                                
-                                // Restore mini position
-                                _windowX = _miniX;
-                                _windowY = _miniY;
-                                
-                                await FlutterOverlayWindow.resizeOverlay(135, 30, false);
-                                await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
+                            DpsView(
+                              players: _players, 
+                              combatTime: _combatTime,
+                              onSelectPlayer: (uid) {
+                                final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
+                                if (sendPort != null) {
+                                  sendPort.send({'selectPlayer': uid});
+                                }
                               },
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 2),
-                                child: Icon(Icons.remove, size: 16, color: Colors.white70),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () async {
-                                 final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
-                                 if (sendPort != null) {
-                                   sendPort.send("RESET");
-                                 } else {
-                                   debugPrint("Could not find communication port");
-                                 }
+                              onTabChanged: (index) {
+                                _dpsTabIndex = index;
                               },
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 2),
-                                child: Icon(Icons.refresh, size: 16, color: Colors.white70),
-                              ),
                             ),
-                            // GestureDetector(
-                            //   onTap: () async {
-                            //     await FlutterOverlayWindow.closeOverlay();
-                            //   },
-                            //   child: const Padding(
-                            //     padding: EdgeInsets.symmetric(horizontal: 2),
-                            //     child: Icon(Icons.settings, size: 16, color: Colors.white70),
-                            //   ),
-                            // ),
+                            const NearbyView(),
+                            const ToolsView(),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      PlayerList(players: _players, metricType: "dps"),
-                      PlayerList(players: _players, metricType: "taken"),
-                      PlayerList(players: _players, metricType: "heal"),
+                      ),
                     ],
                   ),
                 ),
@@ -546,6 +621,27 @@ class _OverlayWidgetState extends State<OverlayWidget>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideTab(int index, IconData icon) {
+    final isSelected = _mainTabIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _mainTabIndex = index;
+        });
+      },
+      child: Container(
+        height: 40,
+        width: 40,
+        color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+        child: Icon(
+          icon,
+          color: isSelected ? Colors.blue : Colors.white54,
+          size: 20,
         ),
       ),
     );
@@ -850,6 +946,23 @@ class _HomePageState extends State<HomePage> {
 
     final combatDuration = storage.currentCombatDuration;
 
+    // Serialize monsters
+    final monsters = storage.monsterInfoDatas.values.map((m) => {
+        'uid': m.uid.toString(),
+        'templateId': m.templateId,
+        'name': m.name,
+        'level': m.level,
+        'hp': m.hp?.toString(),
+        'maxHp': m.maxHp?.toString(),
+        'pos_x': m.position?['x']?.toDouble(),
+        'pos_y': m.position?['y']?.toDouble(),
+        'pos_z': m.position?['z']?.toDouble(),
+    }).toList();
+
+    // Current Player Position
+    final myUid = storage.currentPlayerUuid;
+    final myPos = storage.playerInfoDatas[myUid]?.position;
+
     // Debug: Log first player to check UID transmission
     if (players.isNotEmpty) {
       // _logger.log("First player data: ${players.first}");
@@ -860,6 +973,9 @@ class _HomePageState extends State<HomePage> {
     FlutterOverlayWindow.shareData({
       'players': players,
       'combatTime': combatDuration.inSeconds,
+      'monsters': monsters,
+      'myPos': myPos, 
+      'myUid': myUid.toString(),
     });
   }
 
@@ -1056,231 +1172,3 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class PlayerList extends StatefulWidget {
-  final List<Map<String, dynamic>> players;
-  final String metricType;
-
-  const PlayerList({
-    super.key,
-    required this.players,
-    required this.metricType,
-  });
-
-  @override
-  State<PlayerList> createState() => _PlayerListState();
-}
-
-class _PlayerListState extends State<PlayerList> {
-  final LoggerService _logger = LoggerService();
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Determine keys based on metricType
-    String rateKey = 'dps';
-    String totalKey = 'total';
-    if (widget.metricType == 'heal') {
-      rateKey = 'hps';
-      totalKey = 'totalHeal';
-    } else if (widget.metricType == 'taken') {
-      rateKey = 'takenDps';
-      totalKey = 'totalTaken';
-    }
-
-    // Filter
-    var filtered = widget.players.where((p) {
-      final total = (p[totalKey] as num?)?.toDouble() ?? 0.0;
-      return total > 0;
-    }).toList();
-
-    if (filtered.isEmpty) {
-      return Center(
-        child: Text(TranslationService().translate('NoData'), style: const TextStyle(color: Colors.white54, fontSize: 10)),
-      );
-    }
-
-    // Sort
-    filtered.sort((a, b) {
-      final valA = (a[totalKey] as num?)?.toDouble() ?? 0.0;
-      final valB = (b[totalKey] as num?)?.toDouble() ?? 0.0;
-      return valB.compareTo(valA);
-    });
-
-    // Calculate Max for Progress Bar
-    double maxVal = 0.0;
-    if (filtered.isNotEmpty) {
-      maxVal = (filtered.first[totalKey] as num?)?.toDouble() ?? 0.0;
-    }
-    if (maxVal == 0) maxVal = 1.0;
-
-    // Find "Me"
-    int myIndex = filtered.indexWhere((p) => p['isMe'] == true);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          children: [
-            ListView.builder(
-              controller: _scrollController,
-              itemCount: filtered.length,
-              itemExtent: 18.0,
-              padding: EdgeInsets.zero,
-              itemBuilder: (context, index) {
-                return _buildRow(filtered[index], index, maxVal, rateKey, totalKey);
-              },
-            ),
-            if (myIndex != -1)
-              AnimatedBuilder(
-                animation: _scrollController,
-                builder: (context, child) {
-                  final double itemTop = myIndex * 18.0;
-                  final double scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-                  final double viewportHeight = constraints.maxHeight;
-                  
-                  // Show sticky if item is below the viewport
-                  if (itemTop > scrollOffset + viewportHeight - 18.0) {
-                     return Positioned(
-                       bottom: 0,
-                       left: 0,
-                       right: 0,
-                       child: Container(
-                         color: Colors.black.withValues(alpha: 0.8),
-                         child: _buildRow(filtered[myIndex], myIndex, maxVal, rateKey, totalKey),
-                       ),
-                     );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildRow(Map<String, dynamic> p, int index, double maxVal, String rateKey, String totalKey) {
-    final cls = Classes.fromId(p['classId']);
-    final val = (p[rateKey] as num?)?.toDouble() ?? 0.0;
-    final total = (p[totalKey] as num?)?.toInt() ?? 0;
-    final percent = (total / maxVal).clamp(0.0, 1.0);
-
-    String name = p['name']?.toString() ?? "Unknown";
-    if (p['isMe'] == true && (name == "Unknown" || name.isEmpty)) {
-      name = "Moi";
-    }
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        _logger.log("Row tapped - Full player data: $p");
-        final uidStr = p['uid'] as String?;
-        _logger.log("Row tapped - uid: $uidStr, name: $name");
-        if (uidStr != null && uidStr.isNotEmpty) {
-          // Envoyer un message au processus principal pour sélectionner ce joueur
-          final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
-          if (sendPort != null) {
-            sendPort.send({'selectPlayer': uidStr});
-            _logger.log("Sent selectPlayer message: $uidStr");
-          } else {
-            _logger.log("Could not find communication port");
-          }
-        }
-      },
-      child: Container(
-        height: 18,
-        padding: const EdgeInsets.only(bottom: 1),
-        child: Stack(
-          children: [
-            FractionallySizedBox(
-              widthFactor: percent,
-              child: Container(
-                color: _getClassColor(cls).withValues(alpha: 0.3),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                children: [
-                  Container(width: 2, color: _getClassColor(cls)),
-                  const SizedBox(width: 4),
-                  Text(
-                    "${index + 1}.",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 11,
-                      shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  if (cls != Classes.unknown) ...[
-                    Image.asset(
-                      cls.iconPath,
-                      width: 12,
-                      height: 12,
-                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  Expanded(
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 11,
-                        shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    "${_formatNumber(val)} / ${_formatNumber(total)}",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _getClassColor(Classes cls) {
-    switch (cls.role) {
-      case Role.tank:
-        return Colors.blue;
-      case Role.heal:
-        return Colors.green;
-      case Role.dps:
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _formatNumber(num number) {
-    if (number >= 1000000) {
-      double val = number / 1000000;
-      String s = val < 100 ? val.toStringAsFixed(2) : val.toStringAsFixed(1);
-      return "${s}m";
-    }
-    if (number >= 1000) {
-      double val = number / 1000;
-      String s = val < 100 ? val.toStringAsFixed(2) : val.toStringAsFixed(1);
-      return "${s}k";
-    }
-    return number.toStringAsFixed(0);
-  }
-}

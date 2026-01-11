@@ -2,6 +2,7 @@ import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/player_info.dart';
+import '../models/monster_info.dart';
 import '../models/dps_data.dart';
 import '../services/database_service.dart';
 import '../services/logger_service.dart';
@@ -34,7 +35,13 @@ class DataStorage extends ChangeNotifier {
   }
   
   final Map<Int64, PlayerInfo> _playerInfoDatas = {};
+  final Map<Int64, MonsterInfo> _monsterInfoDatas = {};
   final Map<Int64, DpsData> _fullDpsDatas = {};
+
+  void clearMonsters() {
+    _monsterInfoDatas.clear();
+    notifyListeners();
+  }
 
   // Combat Timer Logic
   DateTime? _lastActionTime;
@@ -80,6 +87,7 @@ class DataStorage extends ChangeNotifier {
   }
 
   Map<Int64, PlayerInfo> get playerInfoDatas => Map.unmodifiable(_playerInfoDatas);
+  Map<Int64, MonsterInfo> get monsterInfoDatas => Map.unmodifiable(_monsterInfoDatas);
   
   // Filter DPS datas to only include entities that are identified as players (exist in playerInfoDatas)
   // This hides monsters/NPCs from the DPS list.
@@ -307,5 +315,97 @@ class DataStorage extends ChangeNotifier {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.maxHp = Int64(value);
     notifyListeners();
+  }
+
+  void setPlayerPosition(Int64 uid, Map<String, double> position) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.position = position;
+    notifyListeners();
+  }
+
+  void setPlayerRotation(Int64 uid, Map<String, double> rotation) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.rotation = rotation;
+    notifyListeners();
+  }
+  
+  void removePlayer(Int64 uid) {
+    if (_playerInfoDatas.containsKey(uid)) {
+      _playerInfoDatas.remove(uid);
+      notifyListeners();
+    }
+  }
+
+  // --- Monster Info Setters ---
+
+  void ensureMonster(Int64 uid) {
+    if (!_monsterInfoDatas.containsKey(uid)) {
+      _monsterInfoDatas[uid] = MonsterInfo(uid: uid);
+      notifyListeners();
+    }
+  }
+
+  void setMonsterTemplateId(Int64 uid, int id) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.templateId = id;
+    notifyListeners();
+  }
+
+  void setMonsterName(Int64 uid, String name) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.name = name;
+    notifyListeners();
+  }
+
+  void setMonsterLevel(Int64 uid, int level) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.level = level;
+    notifyListeners();
+  }
+
+  void setMonsterHp(Int64 uid, Int64 hp) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.hp = hp;
+    if (hp <= Int64.ZERO) {
+      // Logic handled in UI filtering usually, but we can also cleanup if needed.
+    }
+    notifyListeners();
+  }
+  
+  void decreaseMonsterHp(Int64 uid, Int64 damage) {
+    if (_monsterInfoDatas.containsKey(uid)) {
+      final currentHp = _monsterInfoDatas[uid]!.hp ?? Int64.ZERO;
+      if (currentHp > Int64.ZERO) {
+        var newHp = currentHp - damage;
+        if (newHp < Int64.ZERO) newHp = Int64.ZERO;
+        _monsterInfoDatas[uid]!.hp = newHp;
+        notifyListeners();
+      }
+    }
+  }
+
+  void setMonsterMaxHp(Int64 uid, Int64 maxHp) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.maxHp = maxHp;
+    notifyListeners();
+  }
+
+  void setMonsterPosition(Int64 uid, Map<String, double> position) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.position = position;
+    notifyListeners();
+  }
+
+  void setMonsterRotation(Int64 uid, Map<String, double> rotation) {
+    ensureMonster(uid);
+    _monsterInfoDatas[uid]!.rotation = rotation;
+    notifyListeners();
+  }
+
+  void removeMonster(Int64 uid) {
+    if (_monsterInfoDatas.containsKey(uid)) {
+      _monsterInfoDatas.remove(uid);
+      notifyListeners();
+    }
   }
 }
