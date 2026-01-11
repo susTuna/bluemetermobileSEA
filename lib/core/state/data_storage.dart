@@ -149,9 +149,20 @@ class DataStorage extends ChangeNotifier {
       final player = await DatabaseService().getPlayer(uid);
       if (player != null) {
         // Only update if not already present (network update takes precedence)
+        // OR if present but missing fields that DB has
         if (!_playerInfoDatas.containsKey(uid)) {
           _playerInfoDatas[uid] = player;
           notifyListeners();
+        } else {
+           // Merge: Fill gaps in current memory instance with DB data
+           final current = _playerInfoDatas[uid]!;
+           bool changed = false;
+           if (current.name == null && player.name != null) { current.name = player.name; changed = true; }
+           if ((current.professionId == null || current.professionId == 0) && (player.professionId != null && player.professionId != 0)) { current.professionId = player.professionId; changed = true; }
+           if ((current.combatPower == null || current.combatPower == 0) && (player.combatPower != null && player.combatPower != 0)) { current.combatPower = player.combatPower; changed = true; }
+           if ((current.level == null || current.level == 0) && (player.level != null && player.level != 0)) { current.level = player.level; changed = true; }
+           
+           if (changed) notifyListeners();
         }
         return player;
       } else {
@@ -279,32 +290,41 @@ class DataStorage extends ChangeNotifier {
   void ensurePlayer(Int64 uid) {
     if (!_playerInfoDatas.containsKey(uid)) {
       _playerInfoDatas[uid] = PlayerInfo(uid: uid);
+      _fetchPlayerFromDb(uid);
       notifyListeners();
     }
   }
 
   void setPlayerName(Int64 uid, String name) {
     ensurePlayer(uid);
-    _playerInfoDatas[uid]!.name = name;
+    final info = _playerInfoDatas[uid]!;
+    info.name = name;
     _logger.log("setPlayerName called: UID=$uid, Name=$name");
+    DatabaseService().savePlayer(info);
     notifyListeners();
   }
 
   void setPlayerProfessionId(Int64 uid, int id) {
     ensurePlayer(uid);
-    _playerInfoDatas[uid]!.professionId = id;
+    final info = _playerInfoDatas[uid]!;
+    info.professionId = id;
+    DatabaseService().savePlayer(info);
     notifyListeners();
   }
 
   void setPlayerCombatPower(Int64 uid, int value) {
     ensurePlayer(uid);
-    _playerInfoDatas[uid]!.combatPower = value;
+    final info = _playerInfoDatas[uid]!;
+    info.combatPower = value;
+    DatabaseService().savePlayer(info);
     notifyListeners();
   }
 
   void setPlayerLevel(Int64 uid, int value) {
     ensurePlayer(uid);
-    _playerInfoDatas[uid]!.level = value;
+    final info = _playerInfoDatas[uid]!;
+    info.level = value;
+    DatabaseService().savePlayer(info);
     notifyListeners();
   }
 
@@ -317,6 +337,10 @@ class DataStorage extends ChangeNotifier {
   void setPlayerMaxHp(Int64 uid, int value) {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.maxHp = Int64(value);
+    // Don't save maxHP updates constantly unless critical, but often getting maxHP means we got good info?
+    // Let's safe it sparingly or assume other updates will catch it.
+    // Actually MaxHP doesn't change that often.
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
     notifyListeners();
   }
 
