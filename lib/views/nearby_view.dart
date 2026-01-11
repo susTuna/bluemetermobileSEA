@@ -19,11 +19,10 @@ class NearbyView extends StatelessWidget {
   
   String _formatHp(Int64? hp, Int64? maxHp) {
       if (hp == null) return "?";
-      final hpStr = hp.toString();
-      if (maxHp == null || maxHp == Int64.ZERO) return hpStr;
+      if (maxHp == null || maxHp == Int64.ZERO) return "?";
       
       final percent = (hp.toDouble() / maxHp.toDouble() * 100).toStringAsFixed(1);
-      return "$hpStr ($percent%)";
+      return "$percent%";
   }
 
   double _calculateDistance(Map<String, double>? pos1, Map<String, double>? pos2) {
@@ -81,57 +80,72 @@ class NearbyView extends StatelessWidget {
             // Limit to 200m
             if (dist > 200) return const SizedBox.shrink(); // Hide item effectively
 
-            return Card(
-              color: Colors.black45,
-              margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-              child: ListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                title: Row(
-                  children: [
-                    if (m.level != null && m.level! > 0)
-                      Text(
-                        "Lv.${m.level} ",
-                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
-                      ),
-                    Expanded(
-                      child: Text(
-                        (m.name != null && m.name!.isNotEmpty) ? m.name! : "Monster (${m.templateId ?? '?'})",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Text(
-                      _formatDistance(dist),
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ],
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 2),
-                    // HP Bar
-                    if (m.maxHp != null && m.maxHp != Int64.ZERO) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: m.hpPercent,
-                          backgroundColor: Colors.grey[800],
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                             m.hpPercent < 0.3 ? Colors.red : (m.hpPercent < 0.6 ? Colors.orange : Colors.green)
-                          ),
-                          minHeight: 4,
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.white12, width: 0.5),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      if (m.level != null && m.level! > 0)
+                        Text(
+                          "Lv.${m.level}",
+                          style: const TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          (m.name != null && m.name!.isNotEmpty) ? m.name! : "Monster (${m.templateId ?? '?'})",
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDistance(dist),
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
                     ],
-                     Text(
-                      "HP: ${_formatHp(m.hp, m.maxHp)}",
-                      style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                  if (m.maxHp != null && m.maxHp != Int64.ZERO) ...[
+                    const SizedBox(height: 1),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 3,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(1.5),
+                              child: LinearProgressIndicator(
+                                value: m.hpPercent,
+                                backgroundColor: Colors.white12,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                   m.hpPercent < 0.3 ? Colors.redAccent : (m.hpPercent < 0.6 ? Colors.orangeAccent : Colors.greenAccent)
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 35,
+                          child: Text(
+                            _formatHp(m.hp, m.maxHp),
+                            style: const TextStyle(color: Colors.white54, fontSize: 10),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
+                ],
               ),
             );
           },
