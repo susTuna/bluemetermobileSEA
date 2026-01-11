@@ -121,12 +121,12 @@ class DataStorage extends ChangeNotifier {
 
   void updatePlayerInfo(PlayerInfo info) {
     _playerInfoDatas[info.uid] = info;
-    _notFoundUids.remove(info.uid);
+    // _notFoundUids.remove(info.uid);
     DatabaseService().savePlayer(info);
     notifyListeners();
   }
   
-  final Set<Int64> _notFoundUids = {};
+  // final Set<Int64> _notFoundUids = {};
   final Set<Int64> _pendingFetches = {};
 
   PlayerInfo? getPlayerInfoSync(Int64 uid) {
@@ -137,9 +137,9 @@ class DataStorage extends ChangeNotifier {
     if (_playerInfoDatas.containsKey(uid)) {
       return _playerInfoDatas[uid];
     }
-    if (_notFoundUids.contains(uid)) {
-      return null;
-    }
+    // if (_notFoundUids.contains(uid)) {
+    //   return null;
+    // }
     if (_pendingFetches.contains(uid)) {
       return null;
     }
@@ -175,9 +175,9 @@ class DataStorage extends ChangeNotifier {
         return player;
       } else {
         // Only mark as not found if not present
-        if (!_playerInfoDatas.containsKey(uid)) {
-          _notFoundUids.add(uid);
-        }
+        // if (!_playerInfoDatas.containsKey(uid)) {
+        //   _notFoundUids.add(uid);
+        // }
       }
     } catch (e) {
       _logger.error("Error fetching player from DB", error: e);
@@ -191,7 +191,6 @@ class DataStorage extends ChangeNotifier {
     }
 
     if (!_playerInfoDatas.containsKey(uid) && 
-        !_notFoundUids.contains(uid) && 
         !_pendingFetches.contains(uid)) {
       getPlayerInfo(uid);
     }

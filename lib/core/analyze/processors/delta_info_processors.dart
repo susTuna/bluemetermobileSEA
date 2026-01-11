@@ -146,8 +146,16 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           final attackerRaw = d.topSummonerId != Int64.ZERO ? d.topSummonerId : d.attackerUuid;
           if (attackerRaw == Int64.ZERO) continue;
 
-          final isAttackerPlayer = EntityUtils.isUuidPlayerRaw(attackerRaw);
           final attackerUuid = EntityUtils.getPlayerUid(attackerRaw);
+          bool isAttackerPlayer = EntityUtils.isUuidPlayerRaw(attackerRaw);
+          bool isAttackerKnownMonster = _storage.monsterInfoDatas.containsKey(attackerUuid);
+          
+          // Relaxed logic: If attacker is explicitly identified as player via suffix OR
+          // if attacker is simply NOT a known monster, we treat it as a player source for DPS.
+          // This ensures unknown players (or new IDs) are not filtered out.
+          if (!isAttackerPlayer && !isAttackerKnownMonster) {
+             isAttackerPlayer = true;
+          }
 
           // Only record if attacker or target is a player (or both)
           // Actually, usually we care if attacker is player (DPS) or target is player (Damage Taken)

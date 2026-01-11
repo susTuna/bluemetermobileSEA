@@ -899,7 +899,7 @@ class _HomePageState extends State<HomePage> {
     // _logger.log("UpdateOverlay - fullDpsDatas count: ${storage.fullDpsDatas.length}");
 
     final players = storage.fullDpsDatas.entries
-    .where((e) => e.value.totalAttackDamage > Int64.ZERO || e.value.totalHeal > Int64.ZERO || e.value.totalTakenDamage > Int64.ZERO)
+    .where((e) => e.value.totalAttackDamage.toInt() > 0 || e.value.totalHeal.toInt() > 0 || e.value.totalTakenDamage.toInt() > 0)
     .map((e) {
       final uid = e.key;
       final dpsData = e.value;
@@ -998,7 +998,7 @@ class _HomePageState extends State<HomePage> {
     storage.checkTimeout();
 
     final players = storage.fullDpsDatas.entries
-    .where((e) => e.value.totalAttackDamage > Int64.ZERO || e.value.totalHeal > Int64.ZERO || e.value.totalTakenDamage > Int64.ZERO)
+    .where((e) => e.value.totalAttackDamage.toInt() > 0 || e.value.totalHeal.toInt() > 0 || e.value.totalTakenDamage.toInt() > 0)
     .map((e) {
       final uid = e.key;
       final dpsData = e.value;
