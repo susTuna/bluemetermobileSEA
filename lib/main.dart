@@ -430,11 +430,11 @@ class _OverlayWidgetState extends State<OverlayWidget> {
               children: [
                 // Vertical Side Menu
                 Container(
-                  width: 40,
+                  width: 26,
                   color: Colors.black.withValues(alpha: 0.6),
                   child: Column(
                     children: [
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       // Tab 0: DPS Meter
                       _buildSideTab(0, Icons.bar_chart),
                       // Tab 1: Nearby (Radar)
@@ -487,7 +487,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                           _savePosition();
                         },
                         child: Container(
-                          height: 32,
+                          height: 22,
                           color: Colors.transparent, // Hit test
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           child: Row(
@@ -498,7 +498,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                 _formatTime(_combatTime),
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   shadows: [Shadow(blurRadius: 2, color: Colors.black)],
                                 ),
@@ -523,7 +523,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                     },
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(horizontal: 2),
-                                      child: Icon(Icons.remove, size: 16, color: Colors.white70),
+                                      child: Icon(Icons.remove, size: 14, color: Colors.white70),
                                     ),
                                   ),
                                   GestureDetector(
@@ -535,7 +535,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                     },
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(horizontal: 2),
-                                      child: Icon(Icons.refresh, size: 16, color: Colors.white70),
+                                      child: Icon(Icons.refresh, size: 14, color: Colors.white70),
                                     ),
                                   ),
                                 ],
@@ -635,13 +635,13 @@ class _OverlayWidgetState extends State<OverlayWidget> {
         });
       },
       child: Container(
-        height: 40,
-        width: 40,
+        height: 26,
+        width: 26,
         color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
         child: Icon(
           icon,
           color: isSelected ? Colors.blue : Colors.white54,
-          size: 20,
+          size: 16,
         ),
       ),
     );

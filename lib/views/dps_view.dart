@@ -52,7 +52,7 @@ class _DpsViewState extends State<DpsView> with SingleTickerProviderStateMixin {
       children: [
         // Top Bar with Tabs and Timer
         SizedBox(
-          height: 32,
+          height: 24,
           child: Row(
             children: [
               Expanded(
