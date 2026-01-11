@@ -78,8 +78,8 @@ class NearbyView extends StatelessWidget {
             final dist = (sortedMonsters[index]['dist'] as double);
             
             // Filter out very far monsters (likely stale from other zones/teleports)
-            // 3000m = 3km.
-            if (dist > 3000) return const SizedBox.shrink(); // Hide item effectively
+            // Limit to 200m
+            if (dist > 200) return const SizedBox.shrink(); // Hide item effectively
 
             return Card(
               color: Colors.black45,
