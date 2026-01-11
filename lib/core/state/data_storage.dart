@@ -97,15 +97,22 @@ class DataStorage extends ChangeNotifier {
   Map<Int64, DpsData> get fullDpsDatas {
     final filtered = <Int64, DpsData>{};
     _fullDpsDatas.forEach((key, value) {
-      // Always include current player, even if info not loaded yet
+      // Always include current player
       if (key == _currentPlayerUuid) {
         filtered[key] = value;
       } else if (_playerInfoDatas.containsKey(key)) {
         final info = _playerInfoDatas[key];
-        // Only include if has a valid profession ID (monsters usually don't)
         if (info != null && info.professionId != null && info.professionId != 0) {
           filtered[key] = value;
         }
+      } else {
+        // Also include entities that are not in playerInfoDatas BUT we have established DPS data for them
+        // and they likely were players (or we just keep them until combat reset).
+        // Check if we can determine from DpsData if it was a player?
+        // Actually, if they are removed from playerInfoDatas, we lose their Name/Class info.
+        // So we MUST NOT remove them from playerInfoDatas if we want to show them.
+        
+        // This 'else' block is just a fallback, but the real fix is in removePlayer.
       }
     });
     return Map.unmodifiable(filtered);
@@ -358,6 +365,13 @@ class DataStorage extends ChangeNotifier {
   
   void removePlayer(Int64 uid) {
     if (_playerInfoDatas.containsKey(uid)) {
+      // Don't remove player if they have DPS/Healing stats
+      if (_fullDpsDatas.containsKey(uid)) {
+          // Maybe just mark as offline/away? 
+          // For now, doing nothing keeps them in the list.
+          _logger.log("removePlayer($uid) ignored because player has DPS stats.");
+          return;
+      }
       _playerInfoDatas.remove(uid);
       notifyListeners();
     }
