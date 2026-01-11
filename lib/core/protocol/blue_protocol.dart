@@ -387,10 +387,13 @@ class SyncNearDeltaInfo extends GeneratedMessage {
 
 class EEntityType extends ProtobufEnum {
   static const EEntityType entMonster = EEntityType._(1, 'EntMonster');
+  static const EEntityType entNpc = EEntityType._(2, 'EntNpc');
   static const EEntityType entChar = EEntityType._(10, 'EntChar');
+  static const EEntityType entGather = EEntityType._(11, 'EntGather');
+  static const EEntityType entObject = EEntityType._(12, 'EntObject');
 
   static const List<EEntityType> values = <EEntityType> [
-    entMonster, entChar,
+    entMonster, entNpc, entChar, entGather, entObject,
   ];
 
   static final Map<int, EEntityType> _byValue = ProtobufEnum.initByValue(values);

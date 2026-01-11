@@ -7,6 +7,7 @@ import '../../protocol/blue_protocol.dart';
 import '../../models/attr_type.dart';
 import '../../state/data_storage.dart';
 import '../../tools/attr_parser.dart';
+import '../../tools/entity_utils.dart';
 import 'message_processor.dart';
 
 class SyncNearEntitiesProcessor implements IMessageProcessor {
@@ -42,9 +43,13 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
            final uid = entity.uuid >> 16;
            if (uid == Int64.ZERO) continue;
            
-           // We don't know the type, so try removing from both
-           _storage.removeMonster(uid);
-           _storage.removePlayer(uid);
+           // Determine type from UUID since DisappearEntity doesn't have entType
+           if (EntityUtils.isUuidPlayerRaw(entity.uuid)) {
+              _storage.removePlayer(uid);
+           } else {
+              // Assume it's a monster (or just try to remove it from monsters)
+              _storage.removeMonster(uid);
+           }
         }
       }
     } catch (e) {

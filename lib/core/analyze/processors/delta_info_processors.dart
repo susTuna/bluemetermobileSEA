@@ -95,6 +95,10 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                   _storage.setPlayerHp(targetUuid, hpVal);
                 } else if (isTargetMonster) {
                   _storage.setMonsterHp(targetUuid, Int64(hpVal));
+                  // Auto-remove dead monsters when server confirms 0 HP
+                  if (hpVal <= 0) {
+                     _storage.removeMonster(targetUuid);
+                  }
                 }
                 break;
              case AttrType.attrMaxHp: // Handle MaxHP updates too (11320)
