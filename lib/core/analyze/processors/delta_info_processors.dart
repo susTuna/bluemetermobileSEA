@@ -131,6 +131,12 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           final skillId = d.ownerId;
           if (skillId == 0) continue;
 
+          // Check if target is dead (monster killed)
+          if (d.isDead && isTargetMonster) {
+            _storage.setMonsterIsDead(targetUuid, true);
+            _storage.removeMonster(targetUuid);
+          }
+
           final attackerRaw = d.topSummonerId != Int64.ZERO ? d.topSummonerId : d.attackerUuid;
           if (attackerRaw == Int64.ZERO) continue;
 
@@ -154,6 +160,18 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
             damageValue = d.luckyValue;
           }
           
+          if (isTargetMonster) {
+             if (d.isDead) debugPrint("Processing IsDead packet for Monster $targetUuid! Damage: $damageValue");
+             if (damageValue == Int64.ZERO) debugPrint("Zero damage packet for Monster $targetUuid. IsDead: ${d.isDead}");
+          }
+
+          // Check if target is dead (monster killed)
+          // We check this BEFORE skipping 0 damage to capture "Death only" packets if they exist
+          if (d.isDead && isTargetMonster) {
+            _storage.setMonsterIsDead(targetUuid, true);
+            _storage.removeMonster(targetUuid);
+          }
+
           if (damageValue == Int64.ZERO) continue;
 
           // Filter out entities that are not players for the DPS list
@@ -197,11 +215,26 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           } else {
              // Handle Damage
              
-             if (d.type == EDamageType.normal || d.type == EDamageType.miss) { 
+             if (d.type == EDamageType.normal || d.type == EDamageType.miss) {
+                // Debug log for monster damage
+                if (isTargetMonster) {
+                   debugPrint("Damage on Monster $targetUuid: Val=$damageValue, isDead=${d.isDead}, currentHp=${_storage.monsterInfoDatas[targetUuid]?.hp}");
+                }
+ 
                 // Speculatively update Monster HP locally if target is a monster
                 // AND if HP wasn't already updated by an attribute in this packet (to prevent double counting)
                 if (isTargetMonster && !hpUpdated) {
                   _storage.decreaseMonsterHp(targetUuid, damageValue);
+                }
+
+                // Force kill if damage >= current HP (handling fatal hits where server sync is missing/delayed)
+                if (isTargetMonster) {
+                   final currentHp = _storage.monsterInfoDatas[targetUuid]?.hp ?? Int64.ZERO;
+                   // If damage is lethal, kill it.
+                   if (currentHp > Int64.ZERO && damageValue >= currentHp) {
+                       _storage.setMonsterIsDead(targetUuid, true);
+                       _storage.removeMonster(targetUuid);
+                   }
                 }
 
                 if (isAttackerPlayer || isTargetPlayer) {

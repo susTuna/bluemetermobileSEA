@@ -43,12 +43,22 @@ class NearbyView extends StatelessWidget {
         final myPos = storage.playerInfoDatas[myUid]?.position;
 
         final monsters = storage.monsterInfoDatas.values.toList();
+
+        // Debug logging for NearbyView
+        if (monsters.isNotEmpty) {
+           debugPrint("[NearbyView] Rebuild with ${monsters.length} monsters.");
+           for (var m in monsters) {
+               if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) {
+                  debugPrint(" -> [DEAD-KEPT-ALIVE?] Monster ${m.uid}: HP=${m.hp}, isDead=${m.isDead}, Name=${m.name}");
+               }
+           }
+        }
         
         // Calculate distances and sort
         final List<Map<String, dynamic>> sortedMonsters = [];
         for (var m in monsters) {
             // Filter dead monsters
-            if (m.hp != null && m.hp! <= Int64.ZERO) continue;
+            if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) continue;
 
             // Units are typically centimeters in UE games.
             final rawDist = _calculateDistance(myPos, m.position);
@@ -102,7 +112,7 @@ class NearbyView extends StatelessWidget {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          (m.name != null && m.name!.isNotEmpty) ? m.name! : "Monster (${m.templateId ?? '?'})",
+                          ((m.name != null && m.name!.isNotEmpty) ? m.name! : "Monster (${m.templateId ?? '?'})") + (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO) ? " (Dead)" : ""),
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         ),

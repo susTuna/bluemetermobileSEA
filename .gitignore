@@ -1,4 +1,5 @@
 /.crea/
+.DS_Store
 
 # Miscellaneous
 *.class

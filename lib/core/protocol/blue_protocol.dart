@@ -27,6 +27,7 @@ class SyncDamageInfo extends GeneratedMessage {
     ..aInt64(8, 'luckyValue')
     ..aInt64(11, 'attackerUuid')
     ..a<int>(12, 'ownerId', PbFieldType.OU3)
+    ..aOB(17, 'isDead')
     ..aInt64(21, 'topSummonerId')
     ..hasRequiredFields = false;
 
@@ -77,9 +78,14 @@ class SyncDamageInfo extends GeneratedMessage {
   bool hasOwnerId() => $_has(5);
   void clearOwnerId() => clearField(12);
 
-  Int64 get topSummonerId => $_getI64(6);
-  set topSummonerId(Int64 v) { $_setInt64(6, v); }
-  bool hasTopSummonerId() => $_has(6);
+  bool get isDead => $_getBF(6);
+  set isDead(bool v) { $_setBool(6, v); }
+  bool hasIsDead() => $_has(6);
+  void clearIsDead() => clearField(17);
+
+  Int64 get topSummonerId => $_getI64(7);
+  set topSummonerId(Int64 v) { $_setInt64(7, v); }
+  bool hasTopSummonerId() => $_has(7);
   void clearTopSummonerId() => clearField(21);
 }
 

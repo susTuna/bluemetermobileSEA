@@ -128,7 +128,13 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
         (level != null && level > 0) || 
         (name != null && name.isNotEmpty)) {
        
-       _storage.ensureMonster(uid);
+       // CRITICAL: Do NOT respawn if HP is explicitly 0 (Dead body lingering)
+       if (hp != null && hp <= Int64.ZERO) {
+          _storage.removeMonster(uid);
+          return;
+       }
+
+       _storage.ensureMonster(uid, forceRespawn: true);
        
        if (pos != null) _storage.setMonsterPosition(uid, pos);
        if (rot != null) _storage.setMonsterRotation(uid, rot);

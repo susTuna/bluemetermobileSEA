@@ -142,29 +142,24 @@ class _OverlayWidgetState extends State<OverlayWidget> {
              if (event.containsKey('monsters')) {
                final monsters = event['monsters'] as List?;
                if (monsters != null) {
-                 // Clear old monsters or just update?
-                 // For now, update.
-                 // Ideally we should sync full list (remove stale).
-                 // But since we send full list from main, we can clear and add?
-                 // Storage doesn't have "clearMonsters".
-                 // Let's just update for now. 
-                 
-                 // Better: iterate and update/add. Storage handles it.
-                 // But removed monsters won't be removed.
-                 // We should probably clear if we receive a full snapshot.
-                 // But DataStorage logic is additive.
-                 // However, NearbyView sorts by distance, so old far monsters might stay?
-                 // Let's leave it additive for now or implement clear.
-                 
+                 debugPrint("[Overlay Isolate] Received ${monsters.length} monsters.");
+                 final incomingUids = <Int64>{};
+
                  for (var m in monsters) {
                    final map = m as Map;
                    final uid = Int64.parseInt(map['uid'] as String);
-                   storage.ensureMonster(uid);
+                   incomingUids.add(uid);
+
+                   // Allow overlay to sync with main app truth, ignoring local graveyard
+                   storage.ensureMonster(uid, forceRespawn: true);
+                   
                    if (map['templateId'] != null) storage.setMonsterTemplateId(uid, map['templateId'] as int);
                    if (map['name'] != null) storage.setMonsterName(uid, map['name'] as String);
                    if (map['level'] != null) storage.setMonsterLevel(uid, map['level'] as int);
                    if (map['hp'] != null) storage.setMonsterHp(uid, Int64.parseInt(map['hp'] as String));
                    if (map['maxHp'] != null) storage.setMonsterMaxHp(uid, Int64.parseInt(map['maxHp'] as String));
+                   if (map['isDead'] != null) storage.setMonsterIsDead(uid, map['isDead'] as bool);
+                   
                    if (map['pos_x'] != null) {
                       storage.setMonsterPosition(uid, {
                         'x': (map['pos_x'] as num).toDouble(),
@@ -172,6 +167,15 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                         'z': (map['pos_z'] as num).toDouble(),
                       });
                    }
+                 }
+
+                 // Remove stale monsters that are no longer in the list sent by Main Isolate
+                 final currentUids = storage.monsterInfoDatas.keys.toList();
+                 for (var uid in currentUids) {
+                    if (!incomingUids.contains(uid)) {
+                       debugPrint("[Overlay] Removing stale monster $uid");
+                       storage.removeMonster(uid);
+                    }
                  }
                }
              }
@@ -958,6 +962,10 @@ class _HomePageState extends State<HomePage> {
         'pos_y': m.position?['y']?.toDouble(),
         'pos_z': m.position?['z']?.toDouble(),
     }).toList();
+
+    // Debug: Log monster count being sent
+    // _logger.log("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
+    debugPrint("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
 
     // Current Player Position
     final myUid = storage.currentPlayerUuid;

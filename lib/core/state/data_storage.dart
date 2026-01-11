@@ -38,8 +38,11 @@ class DataStorage extends ChangeNotifier {
   final Map<Int64, MonsterInfo> _monsterInfoDatas = {};
   final Map<Int64, DpsData> _fullDpsDatas = {};
 
+  final Set<Int64> _deadMonsters = {};
+
   void clearMonsters() {
     _monsterInfoDatas.clear();
+    _deadMonsters.clear();
     notifyListeners();
   }
 
@@ -338,33 +341,47 @@ class DataStorage extends ChangeNotifier {
 
   // --- Monster Info Setters ---
 
-  void ensureMonster(Int64 uid) {
+  bool ensureMonster(Int64 uid, {bool forceRespawn = false}) {
+    if (forceRespawn) {
+      _deadMonsters.remove(uid);
+    }
+    
+    if (_deadMonsters.contains(uid)) return false;
+
     if (!_monsterInfoDatas.containsKey(uid)) {
       _monsterInfoDatas[uid] = MonsterInfo(uid: uid);
       notifyListeners();
     }
+    return true;
   }
 
   void setMonsterTemplateId(Int64 uid, int id) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.templateId = id;
     notifyListeners();
   }
 
   void setMonsterName(Int64 uid, String name) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.name = name;
     notifyListeners();
   }
 
   void setMonsterLevel(Int64 uid, int level) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.level = level;
     notifyListeners();
   }
 
+  void setMonsterIsDead(Int64 uid, bool isDead) {
+    if (_monsterInfoDatas.containsKey(uid)) {
+       _monsterInfoDatas[uid]!.isDead = isDead;
+       notifyListeners();
+    }
+  }
+
   void setMonsterHp(Int64 uid, Int64 hp) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.hp = hp;
     if (hp <= Int64.ZERO) {
       // Logic handled in UI filtering usually, but we can also cleanup if needed.
@@ -385,26 +402,28 @@ class DataStorage extends ChangeNotifier {
   }
 
   void setMonsterMaxHp(Int64 uid, Int64 maxHp) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.maxHp = maxHp;
     notifyListeners();
   }
 
   void setMonsterPosition(Int64 uid, Map<String, double> position) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.position = position;
     notifyListeners();
   }
 
   void setMonsterRotation(Int64 uid, Map<String, double> rotation) {
-    ensureMonster(uid);
+    if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.rotation = rotation;
     notifyListeners();
   }
 
   void removeMonster(Int64 uid) {
+    _deadMonsters.add(uid);
     if (_monsterInfoDatas.containsKey(uid)) {
       _monsterInfoDatas.remove(uid);
+      debugPrint("[DataStorage] Removed monster $uid. Map size: ${_monsterInfoDatas.length}");
       notifyListeners();
     }
   }

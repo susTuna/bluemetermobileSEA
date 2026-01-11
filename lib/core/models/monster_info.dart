@@ -9,6 +9,7 @@ class MonsterInfo {
   Int64? maxHp;
   Map<String, double>? position;
   Map<String, double>? rotation;
+  bool isDead;
 
   MonsterInfo({
     required this.uid,
@@ -19,6 +20,7 @@ class MonsterInfo {
     this.maxHp,
     this.position,
     this.rotation,
+    this.isDead = false,
   });
   
   double get hpPercent {
