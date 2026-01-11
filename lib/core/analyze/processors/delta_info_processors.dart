@@ -22,9 +22,15 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
     final targetUuidRaw = delta.uuid;
     if (targetUuidRaw == Int64.ZERO) return;
 
-    final isTargetPlayer = EntityUtils.isUuidPlayerRaw(targetUuidRaw);
     final targetUuid = EntityUtils.getPlayerUid(targetUuidRaw);
-    final isTargetMonster = !isTargetPlayer && _storage.monsterInfoDatas.containsKey(targetUuid);
+    
+    // Priority: If in separate monster list, treat as monster. 
+    // This avoids false positive "isUuidPlayerRaw" checks for monsters that might share the suffix.
+    final isKnownMonster = _storage.monsterInfoDatas.containsKey(targetUuid);
+    final isUuidPlayer = EntityUtils.isUuidPlayerRaw(targetUuidRaw);
+
+    final isTargetPlayer = isUuidPlayer && !isKnownMonster;
+    final isTargetMonster = isKnownMonster;
 
     bool hpUpdated = false;
 
