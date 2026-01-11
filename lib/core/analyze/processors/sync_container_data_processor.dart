@@ -22,8 +22,16 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       final vData = syncContainerData.vData;
       if (vData.charId == Int64.ZERO) return;
 
-      // CharId is the Raw UUID, so we need to shift it to get the Player UID.
-      final playerUid = EntityUtils.getPlayerUid(vData.charId);
+      // CharId in SyncContainerData seems to be the already shifted UID (or direct ID) 
+      // based on reference implementation (bpsr-meter) using .toNumber() directly.
+      // If we shift it again, we get 0.
+      // We check if it looks like a Raw UUID (ends in 640) vs a UID.
+      
+      Int64 playerUid = vData.charId;
+      if (playerUid > Int64(0xFFFFFFFF)) {
+         // It's likely a raw UUID, so shift it
+         playerUid = EntityUtils.getPlayerUid(playerUid);
+      }
       
       _logger.log("SyncContainerData received. RawID: ${vData.charId}, PlayerUID: $playerUid");
 

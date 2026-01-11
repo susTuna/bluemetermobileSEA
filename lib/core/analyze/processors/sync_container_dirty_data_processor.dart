@@ -169,18 +169,14 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
   }
 
   bool _doesStreamHaveIdentifier(_BinaryReader reader) {
-    if (reader.remaining < 16) return false;
+    if (reader.remaining < 8) return false;
     
     final id1 = reader.readUInt32();
-    reader.readInt32(); // Skip
+    reader.readInt32(); // Skip padding
     
     if (id1 != 0xFFFFFFFE) return false;
     
-    if (reader.remaining < 8) return false;
-    reader.readInt32(); // Skip
-    reader.readInt32(); // Skip
-    
-    return true;
+    return true; // 8 bytes consumed
   }
 
   String _streamReadString(_BinaryReader reader) {
