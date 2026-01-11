@@ -6,6 +6,7 @@ import '../models/monster_info.dart';
 import '../models/dps_data.dart';
 import '../services/database_service.dart';
 import '../services/logger_service.dart';
+import '../services/monster_name_service.dart';
 
 class DataStorage extends ChangeNotifier {
   static final DataStorage _instance = DataStorage._internal();
@@ -396,6 +397,15 @@ class DataStorage extends ChangeNotifier {
   void setMonsterTemplateId(Int64 uid, int id) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.templateId = id;
+    
+    // Auto-resolve name if not present
+    if (_monsterInfoDatas[uid]!.name == null || _monsterInfoDatas[uid]!.name!.isEmpty) {
+       final name = MonsterNameService().getName(id);
+       if (name != null) {
+          _monsterInfoDatas[uid]!.name = name;
+       }
+    }
+    
     notifyListeners();
   }
 

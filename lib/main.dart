@@ -2,6 +2,11 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:ui';
 
+import 'package:bluemeter_mobile/core/services/translation_service.dart';
+import 'package:bluemeter_mobile/views/dps_view.dart';
+import 'package:bluemeter_mobile/views/nearby_view.dart';
+import 'package:bluemeter_mobile/views/tools_view.dart';
+import 'package:bluemeter_mobile/widgets/player_detail_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,17 +15,18 @@ import 'package:fixnum/fixnum.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/analyze/packet_analyzer_v2.dart';
 import 'core/state/data_storage.dart';
+import 'core/services/monster_name_service.dart';
 import 'core/models/dps_data.dart';
 import 'core/models/player_info.dart';
 
 import 'core/services/logger_service.dart';
-import 'core/services/translation_service.dart';
-import 'widgets/player_detail_card.dart';
-import 'views/dps_view.dart';
-import 'views/nearby_view.dart';
-import 'views/tools_view.dart';
 
-void main() {
+// ...
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await MonsterNameService().load();
+  
   runApp(
     ChangeNotifierProvider(
       create: (context) => DataStorage(),
