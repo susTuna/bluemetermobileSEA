@@ -22,15 +22,20 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
     final targetUuidRaw = delta.uuid;
     if (targetUuidRaw == Int64.ZERO) return;
 
-    final targetUuid = EntityUtils.getPlayerUid(targetUuidRaw);
+    final targetUuid = EntityUtils.getEntityUid(targetUuidRaw);
     
-    // Priority: If in separate monster list, treat as monster. 
-    // This avoids false positive "isUuidPlayerRaw" checks for monsters that might share the suffix.
-    final isKnownMonster = _storage.monsterInfoDatas.containsKey(targetUuid);
-    final isUuidPlayer = EntityUtils.isUuidPlayerRaw(targetUuidRaw);
+    // Use UUID-based entity type detection (like zdps does)
+    final entityType = EntityUtils.getEntityType(targetUuidRaw);
+    final isTargetPlayer = entityType == EEntityTypeId.char;
+    // For monsters: only process if already known (from SyncNearEntities).
+    // Don't auto-create — deltas lack name/level/templateId, causing "Monster (?)" display.
+    final isTargetMonster = entityType == EEntityTypeId.monster 
+        && _storage.monsterInfoDatas.containsKey(targetUuid);
 
-    final isTargetPlayer = isUuidPlayer && !isKnownMonster;
-    final isTargetMonster = isKnownMonster;
+    // Auto-create only for players (player data arrives incrementally via deltas)
+    if (isTargetPlayer) {
+      _storage.ensurePlayer(targetUuid);
+    }
 
     bool hpUpdated = false;
 
@@ -38,8 +43,6 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
     if (delta.hasAttrs()) {
       final attrCollection = delta.attrs;
       if (attrCollection.attrs.isNotEmpty && (isTargetPlayer || isTargetMonster)) {
-        if (isTargetPlayer) _storage.ensurePlayer(targetUuid);
-        if (isTargetMonster) _storage.ensureMonster(targetUuid);
 
         for (var attr in attrCollection.attrs) {
           if (attr.id == 0 || attr.rawData.isEmpty) continue;
@@ -146,16 +149,9 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           final attackerRaw = d.topSummonerId != Int64.ZERO ? d.topSummonerId : d.attackerUuid;
           if (attackerRaw == Int64.ZERO) continue;
 
-          final attackerUuid = EntityUtils.getPlayerUid(attackerRaw);
-          bool isAttackerPlayer = EntityUtils.isUuidPlayerRaw(attackerRaw);
-          bool isAttackerKnownMonster = _storage.monsterInfoDatas.containsKey(attackerUuid);
-          
-          // Relaxed logic: If attacker is explicitly identified as player via suffix OR
-          // if attacker is simply NOT a known monster, we treat it as a player source for DPS.
-          // This ensures unknown players (or new IDs) are not filtered out.
-          if (!isAttackerPlayer && !isAttackerKnownMonster) {
-             isAttackerPlayer = true;
-          }
+          final attackerUuid = EntityUtils.getEntityUid(attackerRaw);
+          final attackerEntityType = EntityUtils.getEntityType(attackerRaw);
+          bool isAttackerPlayer = attackerEntityType == EEntityTypeId.char;
 
           // Only record if attacker or target is a player (or both)
           // Actually, usually we care if attacker is player (DPS) or target is player (Damage Taken)
@@ -173,14 +169,8 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           } else if (d.hasLuckyValue()) {
             damageValue = d.luckyValue;
           }
-          
-          if (isTargetMonster) {
-             if (d.isDead) debugPrint("Processing IsDead packet for Monster $targetUuid! Damage: $damageValue");
-             if (damageValue == Int64.ZERO) debugPrint("Zero damage packet for Monster $targetUuid. IsDead: ${d.isDead}");
-          }
 
           // Check if target is dead (monster killed)
-          // We check this BEFORE skipping 0 damage to capture "Death only" packets if they exist
           if (d.isDead && isTargetMonster) {
             _storage.setMonsterIsDead(targetUuid, true);
             _storage.removeMonster(targetUuid);
@@ -228,27 +218,11 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
              }
           } else {
              // Handle Damage
-             
              if (d.type == EDamageType.normal || d.type == EDamageType.miss) {
-                // Debug log for monster damage
-                if (isTargetMonster) {
-                   debugPrint("Damage on Monster $targetUuid: Val=$damageValue, isDead=${d.isDead}, currentHp=${_storage.monsterInfoDatas[targetUuid]?.hp}");
-                }
- 
                 // Speculatively update Monster HP locally if target is a monster
-                // AND if HP wasn't already updated by an attribute in this packet (to prevent double counting)
+                // AND if HP wasn't already updated by an attribute in this packet
                 if (isTargetMonster && !hpUpdated) {
                   _storage.decreaseMonsterHp(targetUuid, damageValue);
-                }
-
-                // Force kill if damage >= current HP (handling fatal hits where server sync is missing/delayed)
-                if (isTargetMonster) {
-                   final currentHp = _storage.monsterInfoDatas[targetUuid]?.hp ?? Int64.ZERO;
-                   // If damage is lethal, kill it.
-                   if (currentHp > Int64.ZERO && damageValue >= currentHp) {
-                       _storage.setMonsterIsDead(targetUuid, true);
-                       _storage.removeMonster(targetUuid);
-                   }
                 }
 
                 if (isAttackerPlayer || isTargetPlayer) {

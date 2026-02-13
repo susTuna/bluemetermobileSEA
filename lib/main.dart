@@ -58,6 +58,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   // late TabController _tabController; // Moved to DpsView
   List<Map<String, dynamic>> _players = [];
   int _combatTime = 0;
+  int _lineId = 0;
   String? _selectedPlayerUid; 
   
   // Navigation State
@@ -107,6 +108,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
           }
           if (event.containsKey('combatTime')) {
             _combatTime = event['combatTime'] as int;
+          }
+          if (event.containsKey('lineId')) {
+            _lineId = event['lineId'] as int;
           }
           // Update selectedPlayerUid when it's explicitly sent
           if (event.containsKey('selectedPlayerUid')) {
@@ -503,9 +507,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween, // Push items to edges
                             children: [
-                              // Timer (Left aligned in this area)
+                              // Line number (Left aligned in this area)
                               Text(
-                                _formatTime(_combatTime),
+                                _lineId > 0 ? 'L${_lineId}' : '—',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
@@ -669,12 +673,6 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       return "${s}k";
     }
     return number.toStringAsFixed(0);
-  }
-
-  String _formatTime(int seconds) {
-    final int m = seconds ~/ 60;
-    final int s = seconds % 60;
-    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
   Widget _buildPlayerDetail() {
@@ -987,6 +985,7 @@ class _HomePageState extends State<HomePage> {
     FlutterOverlayWindow.shareData({
       'players': players,
       'combatTime': combatDuration.inSeconds,
+      'lineId': storage.lineId,
       'monsters': monsters,
       'myPos': myPos, 
       'myUid': myUid.toString(),
@@ -1058,6 +1057,7 @@ class _HomePageState extends State<HomePage> {
     FlutterOverlayWindow.shareData({
       'players': players,
       'combatTime': combatDuration.inSeconds,
+      'lineId': storage.lineId,
       'selectedPlayerUid': _selectedPlayerUid,
     });
   }

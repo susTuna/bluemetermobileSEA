@@ -41,6 +41,41 @@ class DataStorage extends ChangeNotifier {
 
   final Set<Int64> _deadMonsters = {};
 
+  // Scene / Line tracking
+  int _lineId = 0;
+  int _mapId = 0;
+  int _channelId = 0;
+
+  int get lineId => _lineId;
+  int get mapId => _mapId;
+  int get channelId => _channelId;
+
+  /// Called when SyncContainerData provides scene info.
+  /// Detects line changes and resets transient state accordingly.
+  void onSceneUpdate({int? lineId, int? mapId, int? channelId}) {
+    final bool lineChanged = lineId != null && lineId > 0 && _lineId != lineId;
+    final bool mapChanged = mapId != null && mapId > 0 && _mapId != mapId;
+    
+    if (mapId != null && mapId > 0) _mapId = mapId;
+    if (channelId != null && channelId > 0) _channelId = channelId;
+    if (lineId != null && lineId > 0) _lineId = lineId;
+
+    if (lineChanged || mapChanged) {
+      _logger.log("Scene change detected! Line: $_lineId, Map: $_mapId, Channel: $_channelId");
+      // Clear all transient entity data
+      _monsterInfoDatas.clear();
+      _deadMonsters.clear();
+      // Remove all players except self
+      _playerInfoDatas.removeWhere((uid, _) => uid != _currentPlayerUuid);
+      // Reset combat
+      _fullDpsDatas.clear();
+      _combatStartTime = null;
+      _lastActionTime = null;
+      _isCombatActive = false;
+      notifyListeners();
+    }
+  }
+
   void clearMonsters() {
     _monsterInfoDatas.clear();
     _deadMonsters.clear();

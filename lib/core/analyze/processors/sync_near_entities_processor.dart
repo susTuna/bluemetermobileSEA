@@ -24,7 +24,7 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
         for (var entity in syncNearEntities.appear) {
           if (entity.entType != EEntityType.entChar && entity.entType != EEntityType.entMonster) continue;
 
-          final uid = entity.uuid >> 16;
+          final uid = EntityUtils.getEntityUid(entity.uuid);
           if (uid == Int64.ZERO) continue;
           
           final attrCollection = entity.attrs;
@@ -40,14 +40,15 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
 
       if (syncNearEntities.disappear.isNotEmpty) {
         for (var entity in syncNearEntities.disappear) {
-           final uid = entity.uuid >> 16;
+           final uid = EntityUtils.getEntityUid(entity.uuid);
            if (uid == Int64.ZERO) continue;
            
-           // Determine type from UUID since DisappearEntity doesn't have entType
-           if (EntityUtils.isUuidPlayerRaw(entity.uuid)) {
+           // Use UUID-based entity type detection
+           final entityType = EntityUtils.getEntityType(entity.uuid);
+           if (entityType == EEntityTypeId.char) {
               _storage.removePlayer(uid);
-           } else {
-              // Assume it's a monster (or just try to remove it from monsters)
+           } else if (entityType == EEntityTypeId.monster) {
+              // TransferPassLineLeave indicates line change — already handled by onSceneUpdate
               _storage.removeMonster(uid);
            }
         }

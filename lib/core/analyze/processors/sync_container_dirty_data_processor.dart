@@ -59,6 +59,9 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
         case 2:
           _processNameAndPowerLevel(reader, playerUid);
           break;
+        case 3:
+          _processSceneData(reader);
+          break;
         case 16:
           _processHp(reader, playerUid);
           break;
@@ -136,6 +139,52 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
         _storage.setPlayerProfessionId(playerUid, curProfessionId);
       }
     }
+  }
+
+  /// Parse SceneData blob (field 3 of CharSerialize).
+  /// Extracts LineId (field 15), MapId (field 1), ChannelId (field 2).
+  void _processSceneData(_BinaryReader reader) {
+    // SceneData is a sub-blob: starts with identifier -2, size, field indexes, ends with -3
+    if (!_doesStreamHaveIdentifier(reader)) return;
+
+    int? lineId;
+    int? mapId;
+    int? channelId;
+
+    // Read sub-fields until we hit -3 (end) or run out of data
+    while (reader.remaining >= 8) {
+      final fieldIndex = reader.readUInt32();
+      reader.readInt32(); // padding
+      
+      if (fieldIndex == 0xFFFFFFFD || fieldIndex >= 0x80000000) {
+        // End tag -3 (0xFFFFFFFD) or another special marker → stop
+        break;
+      }
+
+      switch (fieldIndex) {
+        case 1: // MapId
+          mapId = reader.readUInt32();
+          reader.readInt32();
+          break;
+        case 2: // ChannelId
+          channelId = reader.readUInt32();
+          reader.readInt32();
+          break;
+        case 15: // LineId
+          lineId = reader.readUInt32();
+          reader.readInt32();
+          break;
+        default:
+          // Unknown field in SceneData blob - we can't safely skip it
+          // because we don't know its size. Break out.
+          _logger.log("SyncContainerDirtyData SceneData unknown field: $fieldIndex, stopping parse");
+          _storage.onSceneUpdate(lineId: lineId, mapId: mapId, channelId: channelId);
+          return;
+      }
+    }
+
+    _logger.log("SyncContainerDirtyData SceneData - MapId: $mapId, ChannelId: $channelId, LineId: $lineId");
+    _storage.onSceneUpdate(lineId: lineId, mapId: mapId, channelId: channelId);
   }
 
   void _tryReadSpecialMarkerData(_BinaryReader reader, Int64 playerUid) {

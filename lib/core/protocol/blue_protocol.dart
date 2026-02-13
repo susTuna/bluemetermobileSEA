@@ -656,10 +656,58 @@ class UserFightAttr extends GeneratedMessage {
   void clearMaxHp() => clearField(2);
 }
 
+/// SceneData contains the player's current scene info (map, channel, line).
+class SceneData extends GeneratedMessage {
+  static final BuilderInfo _i = BuilderInfo('SceneData', package: const PackageName('BlueProto'), createEmptyInstance: create)
+    ..a<int>(1, 'mapId', PbFieldType.OU3)
+    ..a<int>(2, 'channelId', PbFieldType.OU3)
+    ..a<int>(9, 'planeId', PbFieldType.OU3)
+    ..a<int>(15, 'lineId', PbFieldType.OU3)
+    ..hasRequiredFields = false;
+
+  SceneData() : super();
+  SceneData.fromBuffer(List<int> i, [ExtensionRegistry r = ExtensionRegistry.EMPTY]) : super() {
+    mergeFromBuffer(i, r);
+  }
+
+  @override
+  SceneData clone() => SceneData()..mergeFromMessage(this);
+  @override
+  SceneData createEmptyInstance() => create();
+  @override
+  BuilderInfo get info_ => _i;
+
+  static SceneData create() => SceneData();
+  static PbList<SceneData> createRepeated() => PbList<SceneData>();
+  static SceneData getDefault() => _defaultInstance ??= create()..freeze();
+  static SceneData? _defaultInstance;
+
+  int get mapId => $_getIZ(0);
+  set mapId(int v) { $_setUnsignedInt32(0, v); }
+  bool hasMapId() => $_has(0);
+  void clearMapId() => clearField(1);
+
+  int get channelId => $_getIZ(1);
+  set channelId(int v) { $_setUnsignedInt32(1, v); }
+  bool hasChannelId() => $_has(1);
+  void clearChannelId() => clearField(2);
+
+  int get planeId => $_getIZ(2);
+  set planeId(int v) { $_setUnsignedInt32(2, v); }
+  bool hasPlaneId() => $_has(2);
+  void clearPlaneId() => clearField(9);
+
+  int get lineId => $_getIZ(3);
+  set lineId(int v) { $_setUnsignedInt32(3, v); }
+  bool hasLineId() => $_has(3);
+  void clearLineId() => clearField(15);
+}
+
 class VData extends GeneratedMessage {
   static final BuilderInfo _i = BuilderInfo('VData', package: const PackageName('BlueProto'), createEmptyInstance: create)
     ..aInt64(1, 'charId')
     ..aOM<CharBase>(2, 'charBase', subBuilder: CharBase.create)
+    ..aOM<SceneData>(3, 'sceneData', subBuilder: SceneData.create)
     ..aOM<UserFightAttr>(16, 'attr', subBuilder: UserFightAttr.create)
     ..aOM<RoleLevel>(22, 'roleLevel', subBuilder: RoleLevel.create)
     ..aOM<ProfessionList>(76, 'professionList', subBuilder: ProfessionList.create)
@@ -692,25 +740,32 @@ class VData extends GeneratedMessage {
   bool hasCharBase() => $_has(1);
   void clearCharBase() => clearField(2);
 
-  UserFightAttr get attr => $_getN(2);
+  SceneData get sceneData => $_getN(2);
+  set sceneData(SceneData v) { setField(3, v); }
+  bool hasSceneData() => $_has(2);
+  void clearSceneData() => clearField(3);
+
+  UserFightAttr get attr => $_getN(3);
   set attr(UserFightAttr v) { setField(16, v); }
-  bool hasAttr() => $_has(2);
+  bool hasAttr() => $_has(3);
   void clearAttr() => clearField(16);
 
-  RoleLevel get roleLevel => $_getN(3);
+  RoleLevel get roleLevel => $_getN(4);
   set roleLevel(RoleLevel v) { setField(22, v); }
-  bool hasRoleLevel() => $_has(3);
+  bool hasRoleLevel() => $_has(4);
   void clearRoleLevel() => clearField(22);
 
-  ProfessionList get professionList => $_getN(4);
+  ProfessionList get professionList => $_getN(5);
   set professionList(ProfessionList v) { setField(76, v); }
-  bool hasProfessionList() => $_has(4);
+  bool hasProfessionList() => $_has(5);
   void clearProfessionList() => clearField(76);
 }
 
+/// SyncContainerData wraps VData as a BufferStream (raw blob bytes).
+/// The blob uses a custom binary format (NOT protobuf) — same as zdps BlobReader.
 class SyncContainerData extends GeneratedMessage {
   static final BuilderInfo _i = BuilderInfo('SyncContainerData', package: const PackageName('BlueProto'), createEmptyInstance: create)
-    ..aOM<VData>(1, 'vData', subBuilder: VData.create)
+    ..aOM<BufferStream>(1, 'vData', subBuilder: BufferStream.create)
     ..hasRequiredFields = false;
 
   SyncContainerData() : super();
@@ -730,8 +785,8 @@ class SyncContainerData extends GeneratedMessage {
   static SyncContainerData getDefault() => _defaultInstance ??= create()..freeze();
   static SyncContainerData? _defaultInstance;
 
-  VData get vData => $_getN(0);
-  set vData(VData v) { setField(1, v); }
+  BufferStream get vData => $_getN(0);
+  set vData(BufferStream v) { setField(1, v); }
   bool hasVData() => $_has(0);
   void clearVData() => clearField(1);
 }
