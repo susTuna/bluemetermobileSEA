@@ -28,7 +28,7 @@ class SyncContainerDataProcessor implements IMessageProcessor {
 
       final vData = syncContainerData.vData;
 
-      _logger.log("SyncContainerData received. charId=${vData.charId}, "
+      debugPrint("[BM] SyncContainerData — charId=${vData.charId}, "
           "hasCharBase=${vData.hasCharBase()}, hasSceneData=${vData.hasSceneData()}, "
           "hasAttr=${vData.hasAttr()}, hasRoleLevel=${vData.hasRoleLevel()}, "
           "hasProfessionList=${vData.hasProfessionList()}");
@@ -61,8 +61,9 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       // SceneData → lineId, mapId, channelId
       if (vData.hasSceneData()) {
         final scene = vData.sceneData;
-        _logger.log("SyncContainerData SceneData — mapId=${scene.mapId}, "
-            "channelId=${scene.channelId}, planeId=${scene.planeId}, lineId=${scene.lineId}");
+        debugPrint("[BM] SyncContainerData SceneData — mapId=${scene.mapId}, "
+            "channelId=${scene.channelId}, planeId=${scene.planeId}, lineId=${scene.lineId}, "
+            "hasLineId=${scene.hasLineId()}, hasMapId=${scene.hasMapId()}");
         _storage.onSceneUpdate(
           lineId: scene.lineId > 0 ? scene.lineId : null,
           mapId: scene.mapId > 0 ? scene.mapId : null,

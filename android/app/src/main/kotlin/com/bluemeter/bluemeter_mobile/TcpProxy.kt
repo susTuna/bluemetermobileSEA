@@ -79,6 +79,8 @@ class TcpProxy(
                             session.clientSeq += packet.payloadSize
                             // Send ACK
                             sendTcpPacket(session, Packet.TCP_ACK, null, outputQueue)
+                            // Also forward upstream (client→server) data for Call interception
+                            onDataReceived("UP:${key}", payload)
                         } catch (e: IOException) {
                             // Log.e("TcpProxy", "Write error", e)
                             sessions.remove(key)

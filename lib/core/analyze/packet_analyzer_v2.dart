@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+
 import '../services/logger_service.dart';
 import '../state/data_storage.dart';
 import 'message_analyzer_v2.dart';
@@ -30,7 +32,7 @@ class PacketAnalyzerV2 {
       // Detect handshake at buffer head: first 4 bytes == 0x00633353
       // Full signature is 6 bytes: 00 63 33 53 42 00
       if (packetSize == 0x00633353) {
-        _logger.log("Handshake detected — new session. Skipping 6 bytes.");
+        debugPrint("[BM] *** HANDSHAKE detected — new session! Clearing monsters. ***");
         if (bytes.length >= 6) {
           final remaining = bytes.sublist(6);
           _buffer.clear();

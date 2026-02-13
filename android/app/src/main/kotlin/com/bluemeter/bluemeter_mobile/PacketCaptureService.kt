@@ -54,10 +54,15 @@ class PacketCaptureService : VpnService() {
     }
     
     private val dataBuffer = java.io.ByteArrayOutputStream()
+    private val upstreamBuffer = java.io.ByteArrayOutputStream()
     private val bufferLock = Any()
     // Track which session is the active game session (the one that received the handshake most recently)
     @Volatile
     private var activeGameSession: String? = null
+    // Track the secondary game session (port 5003 service, handshake 00 00 00 06 00 04)
+    @Volatile
+    private var otherGameSession: String? = null
+    private val otherHandshake = byteArrayOf(0x00, 0x00, 0x00, 0x06, 0x00, 0x04)
     
     // Key: SourceIP:SourcePort
     private val udpChannels = HashMap<String, DatagramChannel>() 
@@ -90,6 +95,12 @@ class PacketCaptureService : VpnService() {
         }, 50, 50, TimeUnit.MILLISECONDS)
 
         tcpProxy = TcpProxy(this, ::obtainBuffer) { source, data ->
+            // Handle upstream (client→server) data tagged with "UP:" prefix
+            if (source.startsWith("UP:")) {
+                // We don't need upstream data anymore — lineId comes from port 5003 downstream
+                return@TcpProxy
+            }
+
             // Filter out HTTPS traffic
             if (source.contains("destPort=443")) return@TcpProxy
 
@@ -100,19 +111,39 @@ class PacketCaptureService : VpnService() {
                     // This is a new game session — mark it as active and reset old buffers
                     synchronized(bufferLock) {
                         activeGameSession = source
+                        otherGameSession = null // Reset other session when new game session starts
                         // Discard any leftover data from the previous session
                         dataBuffer.reset()
+                        upstreamBuffer.reset()
                     }
                     Log.i("BlueMeter", "Game session detected: $source (now active)")
                 }
             }
 
-            // Only forward data from the ACTIVE game session (not all valid sessions)
+            // Detect other game session (port 5003) by its handshake pattern
+            if (source != activeGameSession && otherGameSession == null &&
+                !source.contains("destPort=443") && data.size >= 6 &&
+                data[0] == otherHandshake[0] && data[1] == otherHandshake[1] &&
+                data[2] == otherHandshake[2] && data[3] == otherHandshake[3] &&
+                data[4] == otherHandshake[4] && data[5] == otherHandshake[5]) {
+                otherGameSession = source
+                Log.i("BlueMeter", "Other game session detected (port 5003): $source")
+            }
+
+            // Forward active game session downstream to main data buffer
             if (source == activeGameSession) {
                 synchronized(bufferLock) {
                     dataBuffer.write(data)
-                    // Flush immediately if buffer gets too large to avoid Binder transaction limit
                     if (dataBuffer.size() > 200 * 1024) {
+                        flushData()
+                    }
+                }
+            }
+            // Forward other game session downstream to upstream buffer (for scene/line data)
+            else if (source == otherGameSession) {
+                synchronized(bufferLock) {
+                    upstreamBuffer.write(data)
+                    if (upstreamBuffer.size() > 200 * 1024) {
                         flushData()
                     }
                 }
@@ -162,6 +193,14 @@ class PacketCaptureService : VpnService() {
                 intent.setPackage(packageName)
                 sendBroadcast(intent)
                 dataBuffer.reset()
+            }
+            if (upstreamBuffer.size() > 0) {
+                Log.d("BlueMeter", "Flushing upstream: ${upstreamBuffer.size()} bytes")
+                val intent = Intent("com.bluemeter.mobile.UPSTREAM_DATA")
+                intent.putExtra("data", upstreamBuffer.toByteArray())
+                intent.setPackage(packageName)
+                sendBroadcast(intent)
+                upstreamBuffer.reset()
             }
         }
     }

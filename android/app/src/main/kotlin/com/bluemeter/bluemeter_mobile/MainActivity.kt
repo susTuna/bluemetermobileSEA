@@ -15,7 +15,9 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.bluemeter.mobile/vpn"
     private val EVENT_CHANNEL = "com.bluemeter.mobile/packet_stream"
+    private val UPSTREAM_EVENT_CHANNEL = "com.bluemeter.mobile/upstream_stream"
     private var eventSink: EventChannel.EventSink? = null
+    private var upstreamEventSink: EventChannel.EventSink? = null
 
     private val packetReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -23,6 +25,17 @@ class MainActivity: FlutterActivity() {
                 val data = intent.getByteArrayExtra("data")
                 if (data != null) {
                     eventSink?.success(data)
+                }
+            }
+        }
+    }
+
+    private val upstreamReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.bluemeter.mobile.UPSTREAM_DATA") {
+                val data = intent.getByteArrayExtra("data")
+                if (data != null) {
+                    upstreamEventSink?.success(data)
                 }
             }
         }
@@ -66,6 +79,25 @@ class MainActivity: FlutterActivity() {
                 override fun onCancel(arguments: Any?) {
                     unregisterReceiver(packetReceiver)
                     eventSink = null
+                }
+            }
+        )
+
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, UPSTREAM_EVENT_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    upstreamEventSink = events
+                    val filter = IntentFilter("com.bluemeter.mobile.UPSTREAM_DATA")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        registerReceiver(upstreamReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                    } else {
+                        registerReceiver(upstreamReceiver, filter)
+                    }
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    unregisterReceiver(upstreamReceiver)
+                    upstreamEventSink = null
                 }
             }
         )

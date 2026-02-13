@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:bluemeter_mobile/core/services/translation_service.dart';
@@ -835,12 +836,17 @@ class _HomePageState extends State<HomePage> {
   static const eventChannel = EventChannel(
     'com.bluemeter.mobile/packet_stream',
   );
+  static const upstreamEventChannel = EventChannel(
+    'com.bluemeter.mobile/upstream_stream',
+  );
 
   final LoggerService _logger = LoggerService();
 
   bool _isVpnRunning = false;
   StreamSubscription? _packetSubscription;
+  StreamSubscription? _upstreamSubscription;
   late PacketAnalyzerV2 _packetAnalyzer;
+  late PacketAnalyzerV2 _otherSessionAnalyzer;
   Timer? _overlayUpdateTimer;
   ReceivePort? _receivePort;
   String? _selectedPlayerUid; // UID du joueur sélectionné pour affichage de la carte
@@ -849,6 +855,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _packetAnalyzer = PacketAnalyzerV2(DataStorage());
+    _otherSessionAnalyzer = PacketAnalyzerV2(DataStorage());
     
     // Setup communication port
     _receivePort = ReceivePort();
@@ -1063,9 +1070,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _onPacketData(dynamic event) async {
-    // debugPrint("Received packet data: ${event.runtimeType}");
     if (event is Uint8List) {
-      // debugPrint("Processing ${event.length} bytes");
       _packetAnalyzer.processPacket(event);
     } else if (event is List<int>) {
       _packetAnalyzer.processPacket(Uint8List.fromList(event));
@@ -1077,6 +1082,21 @@ class _HomePageState extends State<HomePage> {
         _logger.error("Error processing packet", error: e);
       }
     }
+  }
+
+  void _onUpstreamData(dynamic event) {
+    Uint8List data;
+    if (event is Uint8List) {
+      data = event;
+    } else if (event is List<int>) {
+      data = Uint8List.fromList(event);
+    } else {
+      return;
+    }
+
+    debugPrint("[BM] Port5003 received: ${data.length} bytes");
+    // Feed into a second PacketAnalyzerV2 that shares the same DataStorage
+    _otherSessionAnalyzer.processPacket(data);
   }
 
   Uint8List _hexToBytes(String hex) {
@@ -1125,6 +1145,9 @@ class _HomePageState extends State<HomePage> {
       _packetSubscription = eventChannel.receiveBroadcastStream().listen(
         _onPacketData,
       );
+      _upstreamSubscription = upstreamEventChannel.receiveBroadcastStream().listen(
+        _onUpstreamData,
+      );
     } on PlatformException catch (e) {
       _logger.error("Failed to start VPN", error: e.message);
     }
@@ -1137,6 +1160,7 @@ class _HomePageState extends State<HomePage> {
         _isVpnRunning = false;
       });
       _packetSubscription?.cancel();
+      _upstreamSubscription?.cancel();
     } on PlatformException catch (e) {
       _logger.error("Failed to stop VPN", error: e.message);
     }
