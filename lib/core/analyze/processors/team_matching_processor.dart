@@ -10,24 +10,24 @@ class TeamMatchingProcessor implements IMessageProcessor {
   @override
   void process(Uint8List payload) {
     try {
-      final charTeam = CharTeam.fromBuffer(payload);
+      // final charTeam = CharTeam.fromBuffer(payload);
       
       // Just logging for now as per C# implementation
       // "Queue pop detection is now handled by Return message burst detection"
       
-      if (kDebugMode) {
-        final teamId = charTeam.hasTeamId() ? charTeam.teamId.toString() : "NULL";
-        final leaderId = charTeam.hasLeaderId() ? charTeam.leaderId.toString() : "NULL";
-        final teamNum = charTeam.hasTeamNum() ? charTeam.teamNum.toString() : "NULL";
-        final isMatching = charTeam.hasIsMatching() ? charTeam.isMatching.toString() : "NULL";
-        final memberCount = charTeam.teamMemberData.length;
-        final charIds = charTeam.charIds.join(", ");
+      // if (kDebugMode) {
+      //   final teamId = charTeam.hasTeamId() ? charTeam.teamId.toString() : "NULL";
+      //   final leaderId = charTeam.hasLeaderId() ? charTeam.leaderId.toString() : "NULL";
+      //   final teamNum = charTeam.hasTeamNum() ? charTeam.teamNum.toString() : "NULL";
+      //   final isMatching = charTeam.hasIsMatching() ? charTeam.isMatching.toString() : "NULL";
+      //   final memberCount = charTeam.teamMemberData.length;
+      //   final charIds = charTeam.charIds.join(", ");
         
-        debugPrint("[BM] CharTeam - TeamId: $teamId, LeaderId: $leaderId, TeamNum: $teamNum, IsMatching: $isMatching, MemberCount: $memberCount, CharIds: [$charIds]");
-      }
+      //   debugPrint("[BM] CharTeam - TeamId: $teamId, LeaderId: $leaderId, TeamNum: $teamNum, IsMatching: $isMatching, MemberCount: $memberCount, CharIds: [$charIds]");
+      // }
       
     } catch (e) {
-      debugPrint("[BM] Error processing CharTeam: $e");
+      // debugPrint("[BM] Error processing CharTeam: $e");
     }
   }
 }
