@@ -55,6 +55,9 @@ class PacketCaptureService : VpnService() {
     
     private val dataBuffer = java.io.ByteArrayOutputStream()
     private val bufferLock = Any()
+    // Track which session is the active game session (the one that received the handshake most recently)
+    @Volatile
+    private var activeGameSession: String? = null
     
     // Key: SourceIP:SourcePort
     private val udpChannels = HashMap<String, DatagramChannel>() 
@@ -94,12 +97,18 @@ class PacketCaptureService : VpnService() {
             if (!validGameSessions.contains(source)) {
                 if (indexOf(data, serverSignature) != -1) {
                     validGameSessions.add(source)
-                    Log.i("BlueMeter", "Game session detected: $source")
+                    // This is a new game session — mark it as active and reset old buffers
+                    synchronized(bufferLock) {
+                        activeGameSession = source
+                        // Discard any leftover data from the previous session
+                        dataBuffer.reset()
+                    }
+                    Log.i("BlueMeter", "Game session detected: $source (now active)")
                 }
             }
 
-            // Only forward data from valid game sessions
-            if (validGameSessions.contains(source)) {
+            // Only forward data from the ACTIVE game session (not all valid sessions)
+            if (source == activeGameSession) {
                 synchronized(bufferLock) {
                     dataBuffer.write(data)
                     // Flush immediately if buffer gets too large to avoid Binder transaction limit
@@ -115,6 +124,12 @@ class PacketCaptureService : VpnService() {
         builder.addAddress("10.0.0.2", 24)
         builder.addRoute("0.0.0.0", 0)
         builder.setMtu(1500)
+        // Only capture game traffic — all other apps bypass the VPN
+        try {
+            builder.addAllowedApplication("com.bpsr.apj")
+        } catch (e: Exception) {
+            Log.w("BlueMeter", "Could not restrict VPN to game app: ${e.message}")
+        }
         
         try {
             mInterface = builder.establish()

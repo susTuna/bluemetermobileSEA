@@ -17,7 +17,7 @@ class TcpProxy(
 ) {
     private val selector: Selector = Selector.open()
     private val sessions = ConcurrentHashMap<SessionKey, Session>()
-    private val readBuffer = ByteBuffer.allocate(4096)
+    private val readBuffer = ByteBuffer.allocate(65536)
 
     data class SessionKey(
         val sourceIp: Int,

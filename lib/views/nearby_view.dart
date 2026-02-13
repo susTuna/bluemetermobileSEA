@@ -46,10 +46,10 @@ class NearbyView extends StatelessWidget {
 
         // Debug logging for NearbyView
         if (monsters.isNotEmpty) {
-           debugPrint("[NearbyView] Rebuild with ${monsters.length} monsters.");
+          //  debugPrint("[NearbyView] Rebuild with ${monsters.length} monsters.");
            for (var m in monsters) {
                if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) {
-                  debugPrint(" -> [DEAD-KEPT-ALIVE?] Monster ${m.uid}: HP=${m.hp}, isDead=${m.isDead}, Name=${m.name}");
+                  // debugPrint(" -> [DEAD-KEPT-ALIVE?] Monster ${m.uid}: HP=${m.hp}, isDead=${m.isDead}, Name=${m.name}");
                }
            }
         }

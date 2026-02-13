@@ -115,7 +115,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
           // Update selectedPlayerUid when it's explicitly sent
           if (event.containsKey('selectedPlayerUid')) {
             final newUid = event['selectedPlayerUid'] as String?;
-            _logger.log("Overlay received selectedPlayerUid: $newUid");
+            // _logger.log("Overlay received selectedPlayerUid: $newUid");
             
             // If switching to detail view, save current window size
             if (newUid != null && _selectedPlayerUid == null) {
@@ -152,7 +152,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
              if (event.containsKey('monsters')) {
                final monsters = event['monsters'] as List?;
                if (monsters != null) {
-                 debugPrint("[Overlay Isolate] Received ${monsters.length} monsters.");
+                //  debugPrint("[Overlay Isolate] Received ${monsters.length} monsters.");
                  final incomingUids = <Int64>{};
 
                  for (var m in monsters) {
@@ -855,7 +855,7 @@ class _HomePageState extends State<HomePage> {
     IsolateNameServer.removePortNameMapping('overlay_communication_port'); // Clean up old mapping if any
     IsolateNameServer.registerPortWithName(_receivePort!.sendPort, 'overlay_communication_port');
     _receivePort!.listen((message) {
-      _logger.log("HomePage received message: $message");
+      // _logger.log("HomePage received message: $message");
       if (message == "RESET") {
         DataStorage().reset();
         setState(() {
@@ -969,7 +969,7 @@ class _HomePageState extends State<HomePage> {
 
     // Debug: Log monster count being sent
     // _logger.log("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
-    debugPrint("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
+    // debugPrint("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
 
     // Current Player Position
     final myUid = storage.currentPlayerUuid;
