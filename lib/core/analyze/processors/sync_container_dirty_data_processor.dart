@@ -136,8 +136,10 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
         case 7: // LevelReviveId (uint)
           reader.readInt();
           return true;
-        case 8: // RecordId (HashMap) — too complex, skip rest
-          return false;
+        case 8: // RecordId (HashMap — encoded as sub-blob when present)
+          // Try to skip as sub-blob so we can still read lineId (field 15) after it.
+          // If not a sub-blob, fall back to skipping the rest of the SceneData blob.
+          return _skipSubBlob(reader);
         case 9: // PlaneId (uint)
           reader.readInt();
           return true;

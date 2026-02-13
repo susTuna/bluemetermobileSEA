@@ -56,13 +56,13 @@ class PacketCaptureService : VpnService() {
     private val dataBuffer = java.io.ByteArrayOutputStream()
     private val upstreamBuffer = java.io.ByteArrayOutputStream()
     private val bufferLock = Any()
-    // Track which session is the active game session (the one that received the handshake most recently)
+    // Track which session is the active game session (the one that received the server signature)
     @Volatile
     private var activeGameSession: String? = null
-    // Track the secondary game session (port 5003 service, handshake 00 00 00 06 00 04)
-    @Volatile
-    private var otherGameSession: String? = null
-    private val otherHandshake = byteArrayOf(0x00, 0x00, 0x00, 0x06, 0x00, 0x04)
+    // Buffer pre-signature data per session so it can be replayed when the session becomes active
+    private val pendingSessionData = ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
+    // The game handshake that every new game TCP session starts with
+    private val gameHandshake = byteArrayOf(0x00, 0x00, 0x00, 0x06, 0x00, 0x04)
     
     // Key: SourceIP:SourcePort
     private val udpChannels = HashMap<String, DatagramChannel>() 
@@ -95,42 +95,37 @@ class PacketCaptureService : VpnService() {
         }, 50, 50, TimeUnit.MILLISECONDS)
 
         tcpProxy = TcpProxy(this, ::obtainBuffer) { source, data ->
-            // Handle upstream (client→server) data tagged with "UP:" prefix
-            if (source.startsWith("UP:")) {
-                // We don't need upstream data anymore — lineId comes from port 5003 downstream
-                return@TcpProxy
-            }
+            // Skip upstream (client→server) data
+            if (source.startsWith("UP:")) return@TcpProxy
 
-            // Filter out HTTPS traffic
+            // Skip HTTPS traffic
             if (source.contains("destPort=443")) return@TcpProxy
 
-            // Check for game session
+            // ── 1) Check for server signature → session becomes active ──
             if (!validGameSessions.contains(source)) {
                 if (indexOf(data, serverSignature) != -1) {
                     validGameSessions.add(source)
-                    // This is a new game session — mark it as active and reset old buffers
                     synchronized(bufferLock) {
                         activeGameSession = source
-                        otherGameSession = null // Reset other session when new game session starts
-                        // Discard any leftover data from the previous session
                         dataBuffer.reset()
+                        // Replay any buffered pre-signature data from this session
+                        val pending = pendingSessionData.remove(source)
+                        if (pending != null) {
+                            dataBuffer.write(pending.toByteArray())
+                            Log.i("BlueMeter", "Replayed ${pending.size()} pre-signature bytes")
+                        }
+                        // Write the current chunk (contains the server signature)
+                        dataBuffer.write(data)
                         upstreamBuffer.reset()
                     }
+                    // Clear all other pending sessions — they are from the old connection
+                    pendingSessionData.clear()
                     Log.i("BlueMeter", "Game session detected: $source (now active)")
+                    return@TcpProxy // data already written to dataBuffer
                 }
             }
 
-            // Detect other game session (port 5003) by its handshake pattern
-            if (source != activeGameSession && otherGameSession == null &&
-                !source.contains("destPort=443") && data.size >= 6 &&
-                data[0] == otherHandshake[0] && data[1] == otherHandshake[1] &&
-                data[2] == otherHandshake[2] && data[3] == otherHandshake[3] &&
-                data[4] == otherHandshake[4] && data[5] == otherHandshake[5]) {
-                otherGameSession = source
-                Log.i("BlueMeter", "Other game session detected (port 5003): $source")
-            }
-
-            // Forward active game session downstream to main data buffer
+            // ── 2) Forward active game session data to main dataBuffer ──
             if (source == activeGameSession) {
                 synchronized(bufferLock) {
                     dataBuffer.write(data)
@@ -138,16 +133,46 @@ class PacketCaptureService : VpnService() {
                         flushData()
                     }
                 }
+                return@TcpProxy
             }
-            // Forward other game session downstream to upstream buffer (for scene/line data)
-            else if (source == otherGameSession) {
+
+            // ── 3) Route port 5003 directly to upstreamBuffer ──
+            if (source.contains("destPort=5003")) {
                 synchronized(bufferLock) {
                     upstreamBuffer.write(data)
                     if (upstreamBuffer.size() > 200 * 1024) {
                         flushData()
                     }
                 }
+                return@TcpProxy
             }
+
+            // ── 4) Buffer data from pending sessions (pre-signature combat) ──
+            val pending = pendingSessionData[source]
+            if (pending != null) {
+                // Already known pending session — keep buffering
+                pending.write(data)
+                // Safety limit: don't buffer more than 2MB per session
+                if (pending.size() > 2 * 1024 * 1024) {
+                    pendingSessionData.remove(source)
+                    Log.w("BlueMeter", "Pending session $source exceeded 2MB, dropped")
+                }
+                return@TcpProxy
+            }
+
+            // ── 5) New session starting with game handshake → start buffering ──
+            if (data.size >= 6 &&
+                data[0] == gameHandshake[0] && data[1] == gameHandshake[1] &&
+                data[2] == gameHandshake[2] && data[3] == gameHandshake[3] &&
+                data[4] == gameHandshake[4] && data[5] == gameHandshake[5]) {
+                val buf = java.io.ByteArrayOutputStream()
+                buf.write(data)
+                pendingSessionData[source] = buf
+                Log.i("BlueMeter", "Buffering new pending session: $source")
+                return@TcpProxy
+            }
+
+            // ── 6) Unknown session → ignore ──
         }
 
         val builder = Builder()

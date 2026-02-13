@@ -1094,8 +1094,12 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    debugPrint("[BM] Port5003 received: ${data.length} bytes");
-    // Feed into a second PacketAnalyzerV2 that shares the same DataStorage
+    // Only log non-heartbeat data (heartbeats are 6 bytes)
+    if (data.length > 6) {
+      debugPrint("[BM] Port5003 received: ${data.length} bytes");
+    }
+
+    // Feed into a second PacketAnalyzerV2 (port 5003 only now)
     _otherSessionAnalyzer.processPacket(data);
   }
 

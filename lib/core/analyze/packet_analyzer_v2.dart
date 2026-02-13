@@ -21,6 +21,11 @@ class PacketAnalyzerV2 {
     _drainBuffer();
   }
 
+  /// Clear the internal reassembly buffer (e.g. when the upstream "other" session changes).
+  void clearBuffer() {
+    _buffer.clear();
+  }
+
   /// Drain fully-received packets from the internal buffer.
   void _drainBuffer() {
     while (true) {

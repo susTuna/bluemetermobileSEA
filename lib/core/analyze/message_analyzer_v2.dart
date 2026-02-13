@@ -11,6 +11,7 @@ import 'message_handler_registry.dart';
 
 class MessageAnalyzerV2 {
   final MessageHandlerRegistry _registry;
+  final DataStorage _storage;
   final ZstdCodec _zstd = ZstdCodec();
   final LoggerService _logger = LoggerService();
 
@@ -23,7 +24,7 @@ class MessageAnalyzerV2 {
   // Service UUID for Combat (0x0000000063335342)
   static final BigInt _combatServiceUuid = BigInt.parse("63335342", radix: 16);
 
-  MessageAnalyzerV2(DataStorage storage) : _registry = MessageHandlerRegistry(storage);
+  MessageAnalyzerV2(DataStorage storage) : _storage = storage, _registry = MessageHandlerRegistry(storage);
 
   void process(Uint8List packetData) {
     if (packetData.isEmpty) return;
@@ -88,6 +89,11 @@ class MessageAnalyzerV2 {
 
     debugPrint("[BM] WorldNtf methodId=0x${methodId.toRadixString(16)} (${msgPayload.length} bytes)");
 
+    // Only log 0x15 and 0x16 prominently
+    if (methodId == 0x15) {
+      debugPrint("[BM] ========== SyncContainerData (0x15) RECEIVED! ${msgPayload.length}B ==========");
+    }
+
     final processor = _registry.getProcessor(methodId);
     if (processor != null) {
       processor.process(msgPayload);
@@ -98,49 +104,61 @@ class MessageAnalyzerV2 {
     // Return format: [seqId 4B][callSeqId 4B][retCode 4B][protobuf...]
     if (data.length < 12) return;
 
-    // Header is NOT compressed — only protobuf payload after offset 12 may be
-    final seqId = ByteData.sublistView(data, 0, 4).getUint32(0, Endian.big);
-    final callSeqId = ByteData.sublistView(data, 4, 8).getUint32(0, Endian.big);
-    final retCode = ByteData.sublistView(data, 8, 12).getUint32(0, Endian.big);
-
     if (data.length <= 12) return; // No protobuf payload
 
     Uint8List protobuf = data.sublist(12);
     if (isCompressed) {
       try {
         protobuf = Uint8List.fromList(_zstd.decode(protobuf));
-        debugPrint("[BM] Return seq=$seqId callSeq=$callSeqId ret=$retCode compressed→${protobuf.length}B");
       } catch (e) {
-        debugPrint("[BM] Return zstd decompress failed: $e");
         return;
       }
-    } else if (protobuf.length > 10) {
-      debugPrint("[BM] Return seq=$seqId callSeq=$callSeqId ret=$retCode ${protobuf.length}B");
     }
 
-    // Try to parse protobuf as SyncContainerData
-    if (protobuf.length > 10) {
-      try {
-        final syncData = SyncContainerData.fromBuffer(protobuf);
-        if (syncData.hasVData()) {
-          final vData = syncData.vData;
-          debugPrint("[BM] >>> Return VData: charId=${vData.charId}, "
-              "hasCharBase=${vData.hasCharBase()}, hasSceneData=${vData.hasSceneData()}, "
-              "hasProfessionList=${vData.hasProfessionList()}");
-          if (vData.hasSceneData()) {
-            debugPrint("[BM] >>> SCENE DATA FOUND! lineId=${vData.sceneData.lineId}, "
-                "mapId=${vData.sceneData.mapId}, channelId=${vData.sceneData.channelId}");
-          }
-          if (vData.hasSceneData() || vData.hasCharBase() || vData.hasProfessionList()) {
-            final processor = _registry.getProcessor(0x15);
-            if (processor != null) {
-              processor.process(protobuf);
-            }
-            return;
-          }
+    if (protobuf.length <= 10) return;
+
+    // 1) Try as SyncContainerData (wrapper with VData at field 1)
+    try {
+      final syncData = SyncContainerData.fromBuffer(protobuf);
+      if (syncData.hasVData()) {
+        final vData = syncData.vData;
+        if (vData.hasSceneData() && vData.sceneData.lineId > 0) {
+          debugPrint("[BM] >>>>>> SCENE DATA via SyncContainerData! lineId=${vData.sceneData.lineId}, "
+              "mapId=${vData.sceneData.mapId}, channelId=${vData.sceneData.channelId}");
+          _registry.getProcessor(0x15)?.process(protobuf);
+          return;
         }
-      } catch (_) {}
-    }
+        if (vData.charId.toInt() > 0 && (vData.hasCharBase() || vData.hasProfessionList())) {
+          _registry.getProcessor(0x15)?.process(protobuf);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 2) Try as raw VData directly (Return payload may not be wrapped in SyncContainerData)
+    try {
+      final vData = VData.fromBuffer(protobuf);
+      // Only trust SceneData from raw VData if the serialized SceneData is small
+      // (real SceneData is ~10-30 bytes; false-positive protobuf parses produce 1-9KB blobs)
+      if (vData.hasSceneData()) {
+        final sd = vData.sceneData;
+        final sceneBytes = sd.writeToBuffer();
+        if (sceneBytes.length < 100 && sd.lineId > 0) {
+          debugPrint("[BM] >>>>>> SCENE DATA via raw VData! lineId=${sd.lineId}, "
+              "mapId=${sd.mapId}, channelId=${sd.channelId}");
+          _storage.onSceneUpdate(
+            lineId: sd.lineId,
+            mapId: sd.mapId > 0 ? sd.mapId : null,
+            channelId: sd.channelId > 0 ? sd.channelId : null,
+          );
+          return;
+        }
+      }
+      if (vData.charId.toInt() > 0 && vData.hasCharBase()) {
+        debugPrint("[BM] Return raw VData: charId=${vData.charId}, hasSceneData=${vData.hasSceneData()}, "
+            "hasCharBase=${vData.hasCharBase()}");
+      }
+    } catch (_) {}
   }
 
   void _processCallMsg(Uint8List data, bool isCompressed) {
