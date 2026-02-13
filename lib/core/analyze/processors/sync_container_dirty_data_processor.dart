@@ -7,6 +7,16 @@ import '../../services/logger_service.dart';
 import '../../state/data_storage.dart';
 import 'message_processor.dart';
 
+/// Processes SyncContainerDirtyData (methodId 0x16) — incremental player data updates.
+///
+/// VData is a BufferStream containing blob-encoded CharSerialize bytes.
+/// Blob format (zdps BlobType.Read):
+///   [-2 tag][pad][SIZE][pad][field1_idx][pad][data1]...[field_N_idx][pad][dataN][-3 tag][pad]
+///
+/// Each ReadInt/ReadUInt: 4 bytes data + 4 bytes padding = 8 bytes.
+/// ReadLong: 8 bytes data + 4 bytes padding = 12 bytes.
+/// ReadString: ReadUInt(length) + data(length bytes) + 4 bytes padding.
+/// Sub-blobs: same recursive [-2][pad][SIZE][pad]...[- 3][pad] format.
 class SyncContainerDirtyDataProcessor implements IMessageProcessor {
   final DataStorage _storage;
   final LoggerService _logger = LoggerService();
@@ -22,257 +32,299 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
       if (!dirty.hasVData() || !dirty.vData.hasBufferS() || dirty.vData.bufferS.isEmpty) return;
 
       final buf = Uint8List.fromList(dirty.vData.bufferS);
-      final reader = _BinaryReader(buf);
+      final reader = _BlobReader(buf);
 
-      if (!_doesStreamHaveIdentifier(reader)) return;
-
-      final fieldIndex = reader.readUInt32();
-      reader.readInt32(); // Skip padding
-
-      // The playerUid derived from currentPlayerUuid might be 0 if not set yet.
-      // But SyncContainerDirtyData is always for "Me".
-      // If we don't have the UUID yet, we can't update the player info map correctly.
-      // However, we can try to update the "Unknown" player if we assume 0 is placeholder?
-      // No, we need the real UUID.
-      
-      if (_storage.currentPlayerUuid == Int64.ZERO) {
-         _logger.log("SyncContainerDirtyData received but CurrentPlayerUUID is 0. Ignoring.");
-         return;
-      }
-
-      final playerUid = _storage.currentPlayerUuid; 
-      _logger.log("SyncContainerDirtyData processing for PlayerUID: $playerUid");
-      
+      final playerUid = _storage.currentPlayerUuid;
       _storage.ensurePlayer(playerUid);
 
-      _logger.log("SyncContainerDirtyData FieldIndex: $fieldIndex");
-
-      // Special handling for 0xFFFFFFFD (4294967293)
-      if (fieldIndex == 0xFFFFFFFD || fieldIndex == 4294967293) {
-        _logger.log("SyncContainerDirtyData - Special marker 0xFFFFFFFD detected");
-        // This might be a special marker, try to read the data after it
-        _tryReadSpecialMarkerData(reader, playerUid);
-        return;
-      }
-
-      switch (fieldIndex) {
-        case 2:
-          _processNameAndPowerLevel(reader, playerUid);
-          break;
-        case 3:
-          _processSceneData(reader);
-          break;
-        case 16:
-          _processHp(reader, playerUid);
-          break;
-        case 61:
-          _processProfession(reader, playerUid);
-          break;
-        default:
-          _logger.log("SyncContainerDirtyData Unhandled FieldIndex: $fieldIndex");
-          break;
-      }
+      // Parse top-level CharSerialize blob using zdps BlobType.Read() format
+      _parseBlobFields(reader, (index) {
+        switch (index) {
+          case 1: // CharId (int32 in blob format)
+            reader.readInt(); // consume charId, we already know it
+            return true;
+          case 2: // CharBase sub-blob
+            return _parseCharBase(reader, playerUid);
+          case 3: // SceneData sub-blob
+            return _parseSceneData(reader);
+          case 16: // UserFightAttr sub-blob
+            return _parseAttr(reader, playerUid);
+          case 61: // ProfessionList sub-blob
+            return _parseProfessionList(reader, playerUid);
+          default:
+            return false; // Unknown field → skip rest of blob
+        }
+      });
     } catch (e) {
       _logger.error("Error processing SyncContainerDirtyData", error: e);
     }
   }
 
-  void _processNameAndPowerLevel(_BinaryReader reader, Int64 playerUid) {
-    if (!_doesStreamHaveIdentifier(reader)) {
-        _logger.log("SyncContainerDirtyData _processNameAndPowerLevel: No Identifier");
-        return;
-    }
-    final fieldIndex = reader.readUInt32();
-    reader.readInt32();
-    
-    _logger.log("SyncContainerDirtyData _processNameAndPowerLevel FieldIndex: $fieldIndex");
+  // ---------------------------------------------------------------------------
+  // Sub-blob parsers
+  // ---------------------------------------------------------------------------
 
-    switch (fieldIndex) {
-      case 5:
-        final playerName = _streamReadString(reader);
-        _logger.log("SyncContainerDirtyData Name Update (Field 5): $playerName");
-        if (playerName.isNotEmpty) {
-          _storage.setPlayerName(playerUid, playerName);
-        }
-        break;
-
-      case 35:
-        final fightPoint = reader.readUInt32();
-        reader.readInt32();
-        _logger.log("SyncContainerDirtyData Power Update: $fightPoint");
-        if (fightPoint != 0) {
-          _storage.setPlayerCombatPower(playerUid, fightPoint);
-        }
-        break;
-      default:
-        debugPrint("[BM] SyncContainerDirtyData _processNameAndPowerLevel Unhandled SubField: $fieldIndex");
-        break;
-    }
-  }
-
-  void _processHp(_BinaryReader reader, Int64 playerUid) {
-    if (!_doesStreamHaveIdentifier(reader)) return;
-    final fieldIndex = reader.readUInt32();
-    reader.readInt32();
-
-    switch (fieldIndex) {
-      case 1:
-        final curHp = reader.readUInt32();
-        _storage.setPlayerHp(playerUid, curHp);
-        break;
-      case 2:
-        final maxHp = reader.readUInt32();
-        _storage.setPlayerMaxHp(playerUid, maxHp);
-        break;
-    }
-  }
-
-  void _processProfession(_BinaryReader reader, Int64 playerUid) {
-    if (!_doesStreamHaveIdentifier(reader)) return;
-    final fieldIndex = reader.readUInt32();
-    reader.readInt32();
-
-    if (fieldIndex == 1) {
-      final curProfessionId = reader.readUInt32();
-      reader.readInt32();
-      if (curProfessionId != 0) {
-        _storage.setPlayerProfessionId(playerUid, curProfessionId);
+  bool _parseCharBase(_BlobReader reader, Int64 playerUid) {
+    return _parseBlobFields(reader, (index) {
+      switch (index) {
+        case 1: // CharId (long in CharBase)
+          reader.readLong();
+          return true;
+        case 2: // AccountId (string)
+          reader.readString();
+          return true;
+        case 3: // ShowId (long)
+          reader.readLong();
+          return true;
+        case 4: // ServerId (uint)
+          reader.readInt();
+          return true;
+        case 5: // Name (string)
+          final name = reader.readString();
+          _logger.log("SyncContainerDirtyData Name: '$name'");
+          if (name.isNotEmpty) {
+            _storage.setPlayerName(playerUid, name);
+          }
+          return true;
+        case 6: // Gender (int)
+          reader.readInt();
+          return true;
+        case 35: // FightPoint (int)
+          final fp = reader.readInt();
+          if (fp != 0) {
+            _storage.setPlayerCombatPower(playerUid, fp);
+          }
+          return true;
+        default:
+          return false; // Unknown → skip rest
       }
-    }
+    });
   }
 
-  /// Parse SceneData blob (field 3 of CharSerialize).
-  /// Extracts LineId (field 15), MapId (field 1), ChannelId (field 2).
-  void _processSceneData(_BinaryReader reader) {
-    // SceneData is a sub-blob: starts with identifier -2, size, field indexes, ends with -3
-    if (!_doesStreamHaveIdentifier(reader)) return;
-
+  bool _parseSceneData(_BlobReader reader) {
     int? lineId;
     int? mapId;
     int? channelId;
 
-    // Read sub-fields until we hit -3 (end) or run out of data
-    while (reader.remaining >= 8) {
-      final fieldIndex = reader.readUInt32();
-      reader.readInt32(); // padding
-      
-      if (fieldIndex == 0xFFFFFFFD || fieldIndex >= 0x80000000) {
-        // End tag -3 (0xFFFFFFFD) or another special marker → stop
+    final ok = _parseBlobFields(reader, (index) {
+      switch (index) {
+        case 1: // MapId
+          mapId = reader.readInt();
+          return true;
+        case 2: // ChannelId
+          channelId = reader.readInt();
+          return true;
+        case 3: // Pos (sub-blob)
+          return _skipSubBlob(reader);
+        case 4: // LevelUuid (long)
+          reader.readLong();
+          return true;
+        case 5: // LevelPos (sub-blob)
+          return _skipSubBlob(reader);
+        case 6: // LevelMapId (uint)
+          reader.readInt();
+          return true;
+        case 7: // LevelReviveId (uint)
+          reader.readInt();
+          return true;
+        case 8: // RecordId (HashMap) — too complex, skip rest
+          return false;
+        case 9: // PlaneId (uint)
+          reader.readInt();
+          return true;
+        case 12: // BeforeFallPos (sub-blob)
+          return _skipSubBlob(reader);
+        case 13: // SceneGuid (string)
+          reader.readString();
+          return true;
+        case 14: // DungeonGuid (string)
+          reader.readString();
+          return true;
+        case 15: // LineId
+          lineId = reader.readInt();
+          return true;
+        case 16: // VisualLayerConfigId (uint)
+          reader.readInt();
+          return true;
+        case 18: // SceneAreaId (int)
+          reader.readInt();
+          return true;
+        case 19: // LevelAreaId (int)
+          reader.readInt();
+          return true;
+        case 20: // BeforeFallSceneAreaId (int)
+          reader.readInt();
+          return true;
+        default:
+          return false; // Unknown → skip rest
+      }
+    });
+
+    _logger.log("SyncContainerDirtyData SceneData — mapId=$mapId, channelId=$channelId, lineId=$lineId");
+    _storage.onSceneUpdate(lineId: lineId, mapId: mapId, channelId: channelId);
+    return ok;
+  }
+
+  bool _parseAttr(_BlobReader reader, Int64 playerUid) {
+    return _parseBlobFields(reader, (index) {
+      switch (index) {
+        case 1: // CurHp
+          final hp = reader.readInt();
+          _storage.setPlayerHp(playerUid, hp);
+          return true;
+        case 2: // MaxHp
+          final mhp = reader.readInt();
+          _storage.setPlayerMaxHp(playerUid, mhp);
+          return true;
+        default:
+          return false;
+      }
+    });
+  }
+
+  bool _parseProfessionList(_BlobReader reader, Int64 playerUid) {
+    return _parseBlobFields(reader, (index) {
+      switch (index) {
+        case 1: // CurProfessionId
+          final pid = reader.readInt();
+          if (pid != 0) {
+            _storage.setPlayerProfessionId(playerUid, pid);
+          }
+          return true;
+        default:
+          return false;
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Core blob parser — matches zdps BlobType.Read() exactly
+  // ---------------------------------------------------------------------------
+
+  /// Parse a blob: reads [-2][pad][size][pad], then iterates field indices.
+  /// [fieldHandler] returns true if the field was consumed, false to skip to end.
+  /// Returns true if blob was successfully parsed.
+  bool _parseBlobFields(_BlobReader reader, bool Function(int fieldIndex) fieldHandler) {
+    if (reader.remaining < 8) return false;
+
+    final tag = reader.readInt(); // should be -2
+    if (tag != -2) return false;
+
+    if (reader.remaining < 8) return false;
+    final size = reader.readInt(); // data size (or -3 if empty)
+    if (size == -3) return true; // empty blob
+    if (size < 0) return false; // invalid
+
+    final dataStart = reader.offset;
+
+    if (reader.remaining < 8) return true;
+    var index = reader.readInt(); // first field index
+
+    while (index > 0) {
+      if (!fieldHandler(index)) {
+        // Unknown field → skip to end of blob data
+        reader.setOffset(dataStart + size);
+        // Fall through to read the -3 end tag below
         break;
       }
-
-      switch (fieldIndex) {
-        case 1: // MapId
-          mapId = reader.readUInt32();
-          reader.readInt32();
-          break;
-        case 2: // ChannelId
-          channelId = reader.readUInt32();
-          reader.readInt32();
-          break;
-        case 15: // LineId
-          lineId = reader.readUInt32();
-          reader.readInt32();
-          break;
-        default:
-          // Unknown field in SceneData blob - we can't safely skip it
-          // because we don't know its size. Break out.
-          _logger.log("SyncContainerDirtyData SceneData unknown field: $fieldIndex, stopping parse");
-          _storage.onSceneUpdate(lineId: lineId, mapId: mapId, channelId: channelId);
-          return;
-      }
+      if (reader.remaining < 8) break;
+      index = reader.readInt(); // next field index or -3
     }
 
-    _logger.log("SyncContainerDirtyData SceneData - MapId: $mapId, ChannelId: $channelId, LineId: $lineId");
-    _storage.onSceneUpdate(lineId: lineId, mapId: mapId, channelId: channelId);
-  }
-
-  void _tryReadSpecialMarkerData(_BinaryReader reader, Int64 playerUid) {
-    debugPrint("[BM] SyncContainerDirtyData - Special marker data. Remaining bytes: ${reader.remaining}");
-    
-    // Try to read what comes after the marker
-    if (reader.remaining < 8) return;
-    
-    // Skip the padding after the marker
-    reader.readInt32();
-    
-    // Try to see if there's an identifier and then data
-    if (_doesStreamHaveIdentifier(reader)) {
-      final subFieldIndex = reader.readUInt32();
-      reader.readInt32();
-      debugPrint("[BM] SyncContainerDirtyData - After 0xFFFFFFFD, found SubField: $subFieldIndex");
-      
-      // Maybe this contains the name?
-      if (subFieldIndex == 5 || subFieldIndex == 26) {
-        try {
-          final name = _streamReadString(reader);
-          debugPrint("[BM] SyncContainerDirtyData - Name from 0xFFFFFFFD SubField $subFieldIndex: '$name'");
-          if (name.isNotEmpty) {
-            _storage.setPlayerName(playerUid, name);
-          }
-        } catch (e) {
-          debugPrint("[BM] SyncContainerDirtyData - Failed to read name from 0xFFFFFFFD: $e");
-        }
+    // If we broke out due to skip, read the -3 end tag
+    if (reader.offset == dataStart + size && reader.remaining >= 8) {
+      final endTag = reader.readInt();
+      if (endTag != -3) {
+        _logger.log("BlobType: unexpected end tag $endTag");
       }
     }
+    // If we exited the while because index was -3 (read by readInt),
+    // reader is already past the -3 tag. ✓
+
+    return true;
   }
 
-  bool _doesStreamHaveIdentifier(_BinaryReader reader) {
+  /// Skip a sub-blob entirely by reading its header and jumping past its data + end tag.
+  bool _skipSubBlob(_BlobReader reader) {
     if (reader.remaining < 8) return false;
-    
-    final id1 = reader.readUInt32();
-    reader.readInt32(); // Skip padding
-    
-    if (id1 != 0xFFFFFFFE) return false;
-    
-    return true; // 8 bytes consumed
-  }
 
-  String _streamReadString(_BinaryReader reader) {
-    final length = reader.readUInt32();
-    reader.readInt32(); // Skip
-    
-    if (length > 0) {
-      final bytes = reader.readBytes(length);
-      reader.readInt32(); // Skip padding after string?
-      return utf8.decode(bytes);
-    } else {
-      reader.readInt32(); // Skip padding
-      return "";
-    }
+    final tag = reader.readInt();
+    if (tag != -2) return false;
+
+    if (reader.remaining < 8) return false;
+    final size = reader.readInt();
+    if (size == -3) return true; // empty
+    if (size < 0) return false;
+
+    // Skip past data
+    if (reader.remaining < size + 8) return false; // data + -3 end tag
+    reader.skip(size);
+
+    // Consume -3 end tag
+    reader.readInt();
+    return true;
   }
 }
 
-class _BinaryReader {
+// ---------------------------------------------------------------------------
+// Binary reader for blob format — matches zdps BlobReader exactly.
+// Each Read*() reads data + 4 bytes padding (like BlobReader.ReadInt = offset += 8).
+// ---------------------------------------------------------------------------
+class _BlobReader {
   final ByteData _view;
   int _offset;
   final int _length;
 
-  _BinaryReader(Uint8List buffer)
+  _BlobReader(Uint8List buffer)
       : _view = ByteData.sublistView(buffer),
         _offset = 0,
         _length = buffer.length;
 
   int get remaining => _length - _offset;
+  int get offset => _offset;
 
-  int readUInt32() {
-    if (remaining < 4) throw Exception("EndOfStream");
-    final value = _view.getUint32(_offset, Endian.little);
-    _offset += 4;
-    return value;
+  void setOffset(int o) {
+    _offset = o.clamp(0, _length);
   }
 
-  int readInt32() {
-    if (remaining < 4) throw Exception("EndOfStream");
+  void skip(int n) {
+    _offset = (_offset + n).clamp(0, _length);
+  }
+
+  /// Read int32 LE, advance 8 bytes (4 data + 4 pad). Matches zdps ReadInt().
+  int readInt() {
+    if (remaining < 8) throw Exception("BlobReader: EndOfStream (readInt)");
     final value = _view.getInt32(_offset, Endian.little);
-    _offset += 4;
+    _offset += 8;
     return value;
   }
 
-  Uint8List readBytes(int length) {
-    if (remaining < length) throw Exception("EndOfStream");
+  /// Read uint32 LE, advance 8 bytes. Matches zdps ReadUInt().
+  int readUInt() {
+    if (remaining < 8) throw Exception("BlobReader: EndOfStream (readUInt)");
+    final value = _view.getUint32(_offset, Endian.little);
+    _offset += 8;
+    return value;
+  }
+
+  /// Read int64 LE, advance 12 bytes (8 data + 4 pad). Matches zdps ReadLong().
+  int readLong() {
+    if (remaining < 12) throw Exception("BlobReader: EndOfStream (readLong)");
+    final value = _view.getInt64(_offset, Endian.little);
+    _offset += 12;
+    return value;
+  }
+
+  /// Read string: ReadUInt(length) then data(length) + 4 pad. Matches zdps ReadString().
+  String readString() {
+    final length = readUInt(); // 8 bytes consumed (length + pad)
+    if (length == 0) {
+      _offset += 4; // padding after empty string
+      return '';
+    }
+    if (remaining < length + 4) throw Exception("BlobReader: EndOfStream (readString)");
     final bytes = Uint8List.view(_view.buffer, _view.offsetInBytes + _offset, length);
-    _offset += length;
-    return bytes;
+    _offset += length + 4; // data + 4 pad
+    return utf8.decode(bytes, allowMalformed: true);
   }
 }

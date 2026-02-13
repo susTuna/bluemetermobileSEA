@@ -710,7 +710,7 @@ class VData extends GeneratedMessage {
     ..aOM<SceneData>(3, 'sceneData', subBuilder: SceneData.create)
     ..aOM<UserFightAttr>(16, 'attr', subBuilder: UserFightAttr.create)
     ..aOM<RoleLevel>(22, 'roleLevel', subBuilder: RoleLevel.create)
-    ..aOM<ProfessionList>(76, 'professionList', subBuilder: ProfessionList.create)
+    ..aOM<ProfessionList>(61, 'professionList', subBuilder: ProfessionList.create)
     ..hasRequiredFields = false;
 
   VData() : super();
@@ -756,16 +756,15 @@ class VData extends GeneratedMessage {
   void clearRoleLevel() => clearField(22);
 
   ProfessionList get professionList => $_getN(5);
-  set professionList(ProfessionList v) { setField(76, v); }
+  set professionList(ProfessionList v) { setField(61, v); }
   bool hasProfessionList() => $_has(5);
-  void clearProfessionList() => clearField(76);
+  void clearProfessionList() => clearField(61);
 }
 
-/// SyncContainerData wraps VData as a BufferStream (raw blob bytes).
-/// The blob uses a custom binary format (NOT protobuf) — same as zdps BlobReader.
+/// SyncContainerData wraps VData as a protobuf CharSerialize message.
 class SyncContainerData extends GeneratedMessage {
   static final BuilderInfo _i = BuilderInfo('SyncContainerData', package: const PackageName('BlueProto'), createEmptyInstance: create)
-    ..aOM<BufferStream>(1, 'vData', subBuilder: BufferStream.create)
+    ..aOM<VData>(1, 'vData', subBuilder: VData.create)
     ..hasRequiredFields = false;
 
   SyncContainerData() : super();
@@ -785,8 +784,8 @@ class SyncContainerData extends GeneratedMessage {
   static SyncContainerData getDefault() => _defaultInstance ??= create()..freeze();
   static SyncContainerData? _defaultInstance;
 
-  BufferStream get vData => $_getN(0);
-  set vData(BufferStream v) { setField(1, v); }
+  VData get vData => $_getN(0);
+  set vData(VData v) { setField(1, v); }
   bool hasVData() => $_has(0);
   void clearVData() => clearField(1);
 }
