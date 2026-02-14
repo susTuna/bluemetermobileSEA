@@ -1,149 +1,163 @@
 # BlueMeter — DPS Meter for Blue Protocol: Star Resonance
 
+## Screenshots / Captures d'écran
+
+<p float="left">
+  <img src="images/Screenshot_BPSR_20260214_172155.jpg" width="240" />
+  <img src="images/Screenshot_BPSR_20260214_172147.jpg" width="240" />
+  <img src="images/Screenshot_BPSR_20260214_172140.jpg" width="240" />
+</p>
+
+## Quick Links
+
+- [Latest Release](https://github.com/jbourny/bluemetermobile/releases/latest)
+- [Français](#français)
+- [English](#english)
+
+---
+
 ## Français
 
-**Statut**
-- Pré-alpha — usage expérimental. L'application est utilisable mais comporte des bugs connus.
+### Description
 
-**Description**
-BlueMeter est un DPS/Heal meter mobile conçu pour le jeu "Blue Protocol - Star Resonance". Il fournit un overlay flottant (sur Android) affichant en temps réel :
+BlueMeter est un DPS/Heal meter mobile pour **Blue Protocol: Star Resonance**.
+L'application affiche les informations de combat en temps réel via un overlay Android.
 
-- Dégâts par seconde (DPS)
-- Dégâts subis par seconde
-- Heal par seconde
-- Totaux cumulés
-- Bouton de reset pour remettre les compteurs à zéro
+### Nouveautés — Version 1.1
 
-L'objectif est d'aider les joueurs à analyser leurs performances en combat via un affichage simple et direct.
+- Meilleure prise en compte des données transmises par le jeu.
+- Plus d'informations affichées sur l'écran de détail de DPS.
+- Affichage d'une petite boussole pour les monstres à proximité *(peut encore ne pas fonctionner dans certains cas)*.
+- Affichage du numéro de ligne.
+- Affichage des HP par ligne pour Boss/Monstre grâce à **bptimer.com**.
 
-**Plateforme**
-- Compatible uniquement avec Android.
-- iOS : très peu probable dans un futur proche (limites d'affichage d'overlay sur iOS).
+### Fonctionnalités principales
 
-**Fonctionnalités principales**
-- Overlay flottant affichant DPS / Heal / Dégâts subis (instantané et total)
-- Reset des compteurs
-- Overlay minimal et peu intrusif
+- Overlay flottant avec DPS / Heal / Dégâts subis (instantané + total).
+- Reset rapide des compteurs.
+- Vue de détail DPS enrichie.
+- Informations de proximité des monstres.
 
-**Installation (développeurs / utilisateurs avancés)**
+### Plateforme
+
+- Android uniquement.
+- iOS : non prévu à court terme (limitations d'overlay).
+
+### Installation
+
 1. Cloner le dépôt et ouvrir le projet Flutter.
-2. Sur macOS / Linux / Windows avec Flutter installé :
+2. Construire l'APK :
 
 ```bash
 flutter build apk --release
 ```
 
-3. Installer l'APK sur votre appareil Android.
-4. Autoriser les permissions d'affichage par-dessus les autres applications si demandé.
+3. Installer l'APK sur l'appareil Android.
+4. Autoriser la permission d'affichage par-dessus les autres applications.
 
-**Utilisation**
-- Lancer le jeu puis l'application BlueMeter.
-- L'overlay devrait apparaître automatiquement si les permissions sont accordées.
-- Utiliser le bouton de reset pour remettre les compteurs à zéro.
+### Utilisation
 
-**Problèmes connus (important)**
-- Parfois, certains joueurs s'affichent comme `Unknown`. Contournement : se téléporter dans le jeu puis revenir — le nom se mettra à jour.
-- Déplacement de la fenêtre de l'overlay : le déplacement n'est pas stable et peut sauter ou revenir. Un redémarrage de l'app peut aider temporairement.
-- L'application est en pré-alpha : attendez-vous à d'autres comportements instables ou non couverts.
+- Lancer le jeu, puis BlueMeter.
+- Vérifier que l'overlay est bien autorisé.
+- Utiliser le bouton de reset si nécessaire.
 
-**Dépannage rapide**
-- Si l'overlay n'apparaît pas : vérifier les permissions "Afficher par-dessus les autres applis".
-- Si des noms sont `Unknown` : téléporter/retourner dans la zone pour forcer la mise à jour.
-- Si le déplacement de la fenêtre est erratique : fermer et relancer l'application.
+### Dépannage rapide
 
-**Contribution**
-- Les contributions sont bienvenues — soumettez des issues claires et des pull requests.
-- Pour les améliorations UX (stabilité du drag, gestion des noms), fournissez des étapes de reproduction et des logs si possible.
+- Overlay absent : vérifier les permissions "Afficher par-dessus les autres applis".
+- Problème de déplacement de la fenêtre : redémarrer l'application.
+- Boussole de proximité imprécise : fonctionnalité encore en amélioration.
 
-**Vie privée & Sécurité**
-- L'application lit uniquement les informations nécessaires pour afficher les dégâts/soins reçus et infligés en jeu. Aucune donnée personnelle n'est collectée ni envoyée.
+### Contribution
 
-**Licence**
-- Ce projet est sous license GNU Affero General Public License V3.
+- Les contributions (issues / PR) sont les bienvenues.
 
-**Remerciements / Mention spéciale**
-- Un grand merci au projet PC BlueMeter qui m'a été d'une grande utilité pour établir les bases de ce projet. Si vous cherchez la version PC (DPS Meter pour le même jeu), rendez-vous sur : https://github.com/caaatto/BlueMeter
+### Vie privée & sécurité
 
-**Dons / Soutien**
- - Si vous souhaitez soutenir le projet, vous pouvez m'offrir un café via PayPal : https://paypal.me/JBourny
+- Aucune donnée personnelle n'est collectée ni envoyée.
+
+### Licence
+
+- GNU Affero General Public License v3.
+
+### Remerciements
+
+- Merci au projet PC BlueMeter : https://github.com/caaatto/BlueMeter
+- Merci à **bptimer.com** pour les données utilisées dans l'affichage HP par ligne : https://bptimer.com
+
+### Soutien
+
+- PayPal : https://paypal.me/JBourny
 
 ---
 
 ## English
 
-**Status**
-- Pre-alpha — experimental use. The app is usable but contains known bugs.
+### Description
 
-**Description**
-BlueMeter is a mobile DPS/Heal meter for the game "Blue Protocol - Star Resonance". It provides a floating overlay (on Android) showing in real time:
+BlueMeter is a mobile DPS/Heal meter for **Blue Protocol: Star Resonance**.
+The app provides real-time combat information through an Android floating overlay.
 
-- Damage per second (DPS)
-- Damage taken per second
-- Heal per second
-- Cumulative totals
-- Reset button to zero the counters
+### What's New — Version 1.1
 
-The goal is to help players analyze combat performance with a simple, direct display.
+- Better handling of game-transmitted data.
+- More information on the DPS detail screen.
+- Small compass for nearby monsters *(may still be unreliable in some situations)*.
+- Line number display.
+- HP-by-line display for Boss/Monster thanks to **bptimer.com**.
 
-**Platform**
+### Key Features
+
+- Floating overlay with DPS / Heal / Damage taken (instant + total).
+- Quick counters reset.
+- Enhanced DPS detail view.
+- Nearby monster information.
+
+### Platform
+
 - Android only.
-- iOS: very unlikely in the near future (limited overlay capabilities on iOS).
+- iOS: not planned in the short term (overlay limitations).
 
-**Key features**
-- Floating overlay showing DPS / Heal / Damage taken (instant and total)
-- Reset counters
-- Minimal, unobtrusive overlay
+### Installation
 
-**Installation (developers / advanced users)**
 1. Clone the repository and open the Flutter project.
-2. On macOS / Linux / Windows with Flutter installed:
+2. Build the APK:
 
 ```bash
 flutter build apk --release
 ```
 
 3. Install the APK on your Android device.
-4. Allow the "display over other apps" permission if prompted.
+4. Allow the "display over other apps" permission.
 
-**Usage**
-- Start the game, then open the BlueMeter app.
-- The overlay should appear automatically if permissions are granted.
-- Use the reset button to zero the counters.
+### Usage
 
-**Known issues (important)**
-- Sometimes players appear as `Unknown`. Workaround: teleport away and return in-game — the name should update.
-- Moving the floating overlay can be unstable; dragging may jump or snap back. Restarting the app can help temporarily.
-- The app is in pre-alpha: expect other unstable behaviors.
+- Start the game, then launch BlueMeter.
+- Ensure overlay permission is granted.
+- Use the reset button whenever needed.
 
-**Quick troubleshooting**
-- If the overlay doesn't show: check the "display over other apps" permission.
-- If names are `Unknown`: teleport/return to force an update.
-- If overlay dragging is erratic: close and reopen the app.
+### Quick Troubleshooting
 
-**Contributing**
-- Contributions are welcome — please open clear issues and pull requests.
-- For UX improvements (drag stability, name handling), include reproduction steps and logs when possible.
+- Overlay not visible: check the "display over other apps" permission.
+- Overlay drag issues: restart the app.
+- Nearby compass may be inaccurate in some cases while improvements are ongoing.
 
-**Privacy & Security**
-- The app only reads what is necessary to display damage/heal information from the game. No personal data is collected or transmitted.
+### Contributing
 
-**License**
-- This project is licensed under the GNU Affero General Public License v3.
+- Contributions (issues / PRs) are welcome.
 
-**Acknowledgements**
-- Many thanks to the PC BlueMeter project which provided essential guidance for this project. If you are looking for the PC version, visit: https://github.com/caaatto/BlueMeter
+### Privacy & Security
 
-**Support / Donations**
- - If you'd like to support the project, you can buy me a coffee via PayPal: https://paypal.me/JBourny
+- No personal data is collected or transmitted.
 
----
+### License
 
-## Screenshots / Captures d'écran
+- GNU Affero General Public License v3.
 
-<p float="left">
-  <img src="images/Screenshot_BPSR_20260104_150155.jpg" width="200" />
-  <img src="images/Screenshot_BPSR_20260104_150214.jpg" width="200" /> 
-  <img src="images/Screenshot_BPSR_20260104_150237.jpg" width="200" />
-  <img src="images/Screenshot_BPSR_20260104_150241.jpg" width="200" />
-</p>
+### Acknowledgements
 
+- Thanks to the PC BlueMeter project: https://github.com/caaatto/BlueMeter
+- Thanks to **bptimer.com** for HP-by-line data used in the app: https://bptimer.com
+
+### Support
+
+- PayPal: https://paypal.me/JBourny
