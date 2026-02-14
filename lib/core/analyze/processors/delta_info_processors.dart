@@ -264,10 +264,8 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
           _storage.currentPlayerUuid = playerUid;
           _storage.ensurePlayer(playerUid);
           _logger.log("SyncToMeDeltaInfo - Set currentPlayerUuid to: $playerUid (from raw: $uuidRaw)");
-          
-          // If PlayerUID changed, it likely means a login or character switch.
-          // Clear current monsters to avoid stale data.
-          _storage.clearMonsters();
+          // NOTE: We do NOT clearMonsters here — UUID may vary between packets/sessions.
+          // Real scene changes (line/map) are handled by onSceneUpdate via SyncContainerData.
         }
 
         // Detect teleport / Map change via big position jump?
@@ -284,6 +282,7 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
                    // User reported issues with "3m" residue.
                    // If units are Meters, 500m is a good threshold for teleport.
                    if (dist > 250000) { // 500 squared
+                     debugPrint("[BM] Big position jump ($dist). Clearing ${_storage.monsterInfoDatas.length} monsters.");
                      _storage.clearMonsters();
                    }
                  }

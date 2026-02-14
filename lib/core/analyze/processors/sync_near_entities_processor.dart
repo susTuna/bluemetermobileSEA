@@ -63,9 +63,6 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
   }
 
   void _processMonsterAttrs(Int64 uid, List<Attr> attrs) {
-    // Log all attr IDs for debug
-    final attrIds = attrs.map((a) => a.id).toList();
-    debugPrint("[BM] _processMonsterAttrs uid=$uid attrCount=${attrs.length} ids=$attrIds");
     
     // Temporary storage to validate entity before creation
     Map<String, double>? pos;

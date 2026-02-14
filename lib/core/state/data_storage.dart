@@ -53,14 +53,19 @@ class DataStorage extends ChangeNotifier {
   /// Called when SyncContainerData provides scene info.
   /// Detects line changes and resets transient state accordingly.
   void onSceneUpdate({int? lineId, int? mapId, int? channelId}) {
-    final bool lineChanged = lineId != null && lineId > 0 && _lineId != lineId;
-    final bool mapChanged = mapId != null && mapId > 0 && _mapId != mapId;
+    // Only treat as a real change if we already had a valid value (> 0).
+    // Initial setting (from 0 → value) is NOT a change — don't clear entities.
+    final bool lineChanged = lineId != null && lineId > 0 && _lineId > 0 && _lineId != lineId;
+    final bool mapChanged = mapId != null && mapId > 0 && _mapId > 0 && _mapId != mapId;
+    final oldLine = _lineId;
+    final oldMap = _mapId;
     
     if (mapId != null && mapId > 0) _mapId = mapId;
     if (channelId != null && channelId > 0) _channelId = channelId;
     if (lineId != null && lineId > 0) _lineId = lineId;
 
     if (lineChanged || mapChanged) {
+      debugPrint("[BM] Scene change! Line: $oldLine→$lineId, Map: $oldMap→$mapId. Clearing ${_monsterInfoDatas.length} monsters.");
       _logger.log("Scene change detected! Line: $_lineId, Map: $_mapId, Channel: $_channelId");
       // Clear all transient entity data
       _monsterInfoDatas.clear();

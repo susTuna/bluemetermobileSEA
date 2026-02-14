@@ -70,8 +70,8 @@ class SyncContainerDataProcessor implements IMessageProcessor {
           channelId: scene.channelId > 0 ? scene.channelId : null,
         );
       } else {
-        _logger.log("SyncContainerData: SceneData absent — clearing monsters");
-        _storage.clearMonsters();
+        // SceneData absent is normal for other entities (NPCs, etc.) — do NOT clear monsters.
+        // Only onSceneUpdate (real line/map change) should clear.
       }
 
       // Attr → HP
