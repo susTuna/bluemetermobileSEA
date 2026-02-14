@@ -44,14 +44,23 @@ class NearbyView extends StatelessWidget {
 
         final monsters = storage.monsterInfoDatas.values.toList();
 
+        // Shared monster filter: real combat monsters only
+        bool isValidMonster(MonsterInfo m) {
+          if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) return false;
+          final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
+          final hasLevel = m.level != null && m.level! > 0;
+          if (!hasHp && !hasLevel) return false;
+          // Skip unnamed entities (dungeon props/traps — never receive a name)
+          if (m.name == null || m.name!.isEmpty) return false;
+          // Skip resonance entities (fake combat companions)
+          if (m.name!.contains('Resonance')) return false;
+          return true;
+        }
+
         // Debug: log all monsters in storage
         if (monsters.isNotEmpty) {
-          final names = monsters.where((m) {
-            if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) return false;
-            final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
-            final hasLevel = m.level != null && m.level! > 0;
-            return hasHp || hasLevel;
-          }).map((m) => '${m.name ?? "?"} tid=${m.templateId} lv=${m.level} hp=${m.hp}/${m.maxHp}').toList();
+          final names = monsters.where(isValidMonster)
+            .map((m) => '${m.name} tid=${m.templateId} lv=${m.level} hp=${m.hp}/${m.maxHp}').toList();
           if (names.isNotEmpty) {
             debugPrint("[BM] NearbyView monsters (${names.length}): ${names.join(' | ')}");
           }
@@ -60,14 +69,7 @@ class NearbyView extends StatelessWidget {
         // Calculate distances and sort
         final List<Map<String, dynamic>> sortedMonsters = [];
         for (var m in monsters) {
-            // Filter dead monsters
-            if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) continue;
-
-            // Skip monsters without combat stats (resonances, companions, gatherables)
-            // A real combat monster must have HP or level — name alone is not enough
-            final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
-            final hasLevel = m.level != null && m.level! > 0;
-            if (!hasHp && !hasLevel) continue;
+            if (!isValidMonster(m)) continue;
 
             final rawDist = _calculateDistance(myPos, m.position);
             sortedMonsters.add({'monster': m, 'dist': rawDist});

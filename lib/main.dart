@@ -959,9 +959,16 @@ class _HomePageState extends State<HomePage> {
 
     // Serialize monsters — only send monsters with useful display info
     final monsters = storage.monsterInfoDatas.values
-      .where((m) => 
-        (m.maxHp != null && m.maxHp! > Int64.ZERO) ||
-        (m.level != null && m.level! > 0))
+      .where((m) {
+        final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
+        final hasLevel = m.level != null && m.level! > 0;
+        if (!hasHp && !hasLevel) return false;
+        // Skip unnamed entities (dungeon props/traps)
+        if (m.name == null || m.name!.isEmpty) return false;
+        // Skip resonance entities
+        if (m.name!.contains('Resonance')) return false;
+        return true;
+      })
       .map((m) => {
         'uid': m.uid.toString(),
         'templateId': m.templateId,
