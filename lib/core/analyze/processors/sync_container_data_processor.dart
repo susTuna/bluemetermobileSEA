@@ -45,8 +45,14 @@ class SyncContainerDataProcessor implements IMessageProcessor {
         playerUid = EntityUtils.getPlayerUid(playerUid);
       }
 
-      _storage.currentPlayerUuid = playerUid;
-      _storage.ensurePlayer(playerUid);
+      // Only the FULL player SyncContainerData has Attr+RoleLevel (the 277KB packet).
+      // Small SyncContainerData (NPCs, companions, group members) only have CharBase.
+      // Only update currentPlayerUuid from the full player packet to avoid corruption.
+      final isFullPlayerData = vData.hasAttr() && vData.hasRoleLevel();
+      if (isFullPlayerData) {
+        _storage.currentPlayerUuid = playerUid;
+        _storage.ensurePlayer(playerUid);
+      }
 
       // CharBase → name, combat power
       if (vData.hasCharBase()) {
@@ -59,7 +65,11 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       }
 
       // SceneData → lineId, mapId, channelId
-      if (vData.hasSceneData()) {
+      // ONLY process SceneData from the PLAYER's own SyncContainerData.
+      // Other entities (NPCs, companions, etc.) also have SceneData but with
+      // different values that would corrupt our scene tracking.
+      // Since we only set currentPlayerUuid from full player data, this check is reliable.
+      if (vData.hasSceneData() && isFullPlayerData) {
         final scene = vData.sceneData;
         debugPrint("[BM] SyncContainerData SceneData — mapId=${scene.mapId}, "
             "channelId=${scene.channelId}, planeId=${scene.planeId}, lineId=${scene.lineId}, "
@@ -69,6 +79,8 @@ class SyncContainerDataProcessor implements IMessageProcessor {
           mapId: scene.mapId > 0 ? scene.mapId : null,
           channelId: scene.channelId > 0 ? scene.channelId : null,
         );
+      } else if (vData.hasSceneData()) {
+        // Non-player SceneData — ignore silently
       } else {
         // SceneData absent is normal for other entities (NPCs, etc.) — do NOT clear monsters.
         // Only onSceneUpdate (real line/map change) should clear.

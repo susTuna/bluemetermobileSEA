@@ -44,6 +44,19 @@ class NearbyView extends StatelessWidget {
 
         final monsters = storage.monsterInfoDatas.values.toList();
 
+        // Debug: log all monsters in storage
+        if (monsters.isNotEmpty) {
+          final names = monsters.where((m) {
+            if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) return false;
+            final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
+            final hasLevel = m.level != null && m.level! > 0;
+            return hasHp || hasLevel;
+          }).map((m) => '${m.name ?? "?"} tid=${m.templateId} lv=${m.level} hp=${m.hp}/${m.maxHp}').toList();
+          if (names.isNotEmpty) {
+            debugPrint("[BM] NearbyView monsters (${names.length}): ${names.join(' | ')}");
+          }
+        }
+
         // Calculate distances and sort
         final List<Map<String, dynamic>> sortedMonsters = [];
         for (var m in monsters) {

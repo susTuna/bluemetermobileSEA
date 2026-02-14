@@ -75,6 +75,11 @@ class MessageAnalyzerV2 {
     }
 
     if (!isCombat && hasProcessor) {
+      // Non-combat service with same methodId — only process if from combat tag
+      // Port 5003 sends methodId=0x6 (same as SyncNearEntities) but different protobuf format
+      if (tag == 'port5003') {
+        return; // Skip — different service, different format
+      }
       debugPrint("[BM] Notify non-combat svc=0x${serviceUuid.toRadixString(16)} method=0x${methodId.toRadixString(16)} — processing anyway");
     }
 

@@ -57,15 +57,18 @@ class DataStorage extends ChangeNotifier {
     // Initial setting (from 0 → value) is NOT a change — don't clear entities.
     final bool lineChanged = lineId != null && lineId > 0 && _lineId > 0 && _lineId != lineId;
     final bool mapChanged = mapId != null && mapId > 0 && _mapId > 0 && _mapId != mapId;
+    // Detect dungeon entry: player had a valid lineId but now it's gone (lineId=0/null)
+    final bool dungeonEntry = (lineId == null || lineId == 0) && _lineId > 0;
     final oldLine = _lineId;
     final oldMap = _mapId;
     
     if (mapId != null && mapId > 0) _mapId = mapId;
     if (channelId != null && channelId > 0) _channelId = channelId;
     if (lineId != null && lineId > 0) _lineId = lineId;
+    if (dungeonEntry) _lineId = 0; // Mark as "in dungeon"
 
-    if (lineChanged || mapChanged) {
-      debugPrint("[BM] Scene change! Line: $oldLine→$lineId, Map: $oldMap→$mapId. Clearing ${_monsterInfoDatas.length} monsters.");
+    if (lineChanged || mapChanged || dungeonEntry) {
+      debugPrint("[BM] Scene change! Line: $oldLine→${lineId ?? 0}${dungeonEntry ? ' (dungeon)' : ''}, Map: $oldMap→$mapId. Clearing ${_monsterInfoDatas.length} monsters.");
       _logger.log("Scene change detected! Line: $_lineId, Map: $_mapId, Channel: $_channelId");
       // Clear all transient entity data
       _monsterInfoDatas.clear();

@@ -268,8 +268,9 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
           // Real scene changes (line/map) are handled by onSceneUpdate via SyncContainerData.
         }
 
-        // Detect teleport / Map change via big position jump?
-        // Check if we have position in baseDelta
+        // Position jump detection — log only, do NOT clear monsters.
+        // Monster clearing is handled by onSceneUpdate (line/map/dungeon changes).
+        // Clearing here races with SyncNearEntities and kills dungeon boss data.
         if (deltaInfo.hasBaseDelta() && deltaInfo.baseDelta.hasAttrs()) {
            for (var attr in deltaInfo.baseDelta.attrs.attrs) {
              if (attr.id == 52) { // AttrPos
@@ -278,12 +279,8 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
                  final oldPos = _storage.playerInfoDatas[playerUid]?.position;
                  if (oldPos != null) {
                    final dist = _calculateDist(oldPos, val);
-                   // If jump > 500 units, clear monsters
-                   // User reported issues with "3m" residue.
-                   // If units are Meters, 500m is a good threshold for teleport.
                    if (dist > 250000) { // 500 squared
-                     debugPrint("[BM] Big position jump ($dist). Clearing ${_storage.monsterInfoDatas.length} monsters.");
-                     _storage.clearMonsters();
+                     debugPrint("[BM] Big position jump ($dist) — ${_storage.monsterInfoDatas.length} monsters (no clear).");
                    }
                  }
                }
