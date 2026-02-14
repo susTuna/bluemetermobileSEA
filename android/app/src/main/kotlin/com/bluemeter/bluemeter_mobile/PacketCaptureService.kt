@@ -59,10 +59,13 @@ class PacketCaptureService : VpnService() {
     // Track which session is the active game session (the one that received the server signature)
     @Volatile
     private var activeGameSession: String? = null
-    // Buffer pre-signature data per session so it can be replayed when the session becomes active
-    private val pendingSessionData = ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
+    // Track sessions that started with the game handshake but haven't received the server signature yet
+    private val gameSessionCandidates = ConcurrentHashMap.newKeySet<String>()
     // The game handshake that every new game TCP session starts with
     private val gameHandshake = byteArrayOf(0x00, 0x00, 0x00, 0x06, 0x00, 0x04)
+    // Track the current port 5003 session to detect reconnects
+    @Volatile
+    private var port5003Session: String? = null
     
     // Key: SourceIP:SourcePort
     private val udpChannels = HashMap<String, DatagramChannel>() 
@@ -95,80 +98,64 @@ class PacketCaptureService : VpnService() {
         }, 50, 50, TimeUnit.MILLISECONDS)
 
         tcpProxy = TcpProxy(this, ::obtainBuffer) { source, data ->
-            // Skip upstream (client→server) data
+            // Skip upstream (client→server) data and HTTPS
             if (source.startsWith("UP:")) return@TcpProxy
-
-            // Skip HTTPS traffic
             if (source.contains("destPort=443")) return@TcpProxy
 
-            // ── 1) Check for server signature → session becomes active ──
-            if (!validGameSessions.contains(source)) {
-                if (indexOf(data, serverSignature) != -1) {
-                    validGameSessions.add(source)
-                    synchronized(bufferLock) {
-                        activeGameSession = source
-                        dataBuffer.reset()
-                        // Replay any buffered pre-signature data from this session
-                        val pending = pendingSessionData.remove(source)
-                        if (pending != null) {
-                            dataBuffer.write(pending.toByteArray())
-                            Log.i("BlueMeter", "Replayed ${pending.size()} pre-signature bytes")
-                        }
-                        // Write the current chunk (contains the server signature)
-                        dataBuffer.write(data)
-                        upstreamBuffer.reset()
-                    }
-                    // Clear all other pending sessions — they are from the old connection
-                    pendingSessionData.clear()
-                    Log.i("BlueMeter", "Game session detected: $source (now active)")
-                    return@TcpProxy // data already written to dataBuffer
-                }
-            }
-
-            // ── 2) Forward active game session data to main dataBuffer ──
+            // ── 1) Fast path: forward active game session data ──
             if (source == activeGameSession) {
                 synchronized(bufferLock) {
                     dataBuffer.write(data)
-                    if (dataBuffer.size() > 200 * 1024) {
-                        flushData()
-                    }
+                    if (dataBuffer.size() > 200 * 1024) flushData()
                 }
                 return@TcpProxy
             }
 
-            // ── 3) Route port 5003 directly to upstreamBuffer ──
+            // ── 2) Port 5003 → upstream buffer ──
             if (source.contains("destPort=5003")) {
                 synchronized(bufferLock) {
-                    upstreamBuffer.write(data)
-                    if (upstreamBuffer.size() > 200 * 1024) {
-                        flushData()
+                    if (source != port5003Session) {
+                        port5003Session = source
+                        upstreamBuffer.reset()
                     }
+                    upstreamBuffer.write(data)
+                    if (upstreamBuffer.size() > 200 * 1024) flushData()
                 }
                 return@TcpProxy
             }
 
-            // ── 4) Buffer data from pending sessions (pre-signature combat) ──
-            val pending = pendingSessionData[source]
-            if (pending != null) {
-                // Already known pending session — keep buffering
-                pending.write(data)
-                // Safety limit: don't buffer more than 2MB per session
-                if (pending.size() > 2 * 1024 * 1024) {
-                    pendingSessionData.remove(source)
-                    Log.w("BlueMeter", "Pending session $source exceeded 2MB, dropped")
+            // ── 3) Game session candidate: forward to dataBuffer, check for server signature ──
+            if (gameSessionCandidates.contains(source)) {
+                if (!validGameSessions.contains(source) && indexOf(data, serverSignature) != -1) {
+                    // Server signature found — this session is now the active game session
+                    validGameSessions.add(source)
+                    activeGameSession = source
+                    gameSessionCandidates.remove(source)
+                    Log.i("BlueMeter", "Game session detected: $source (now active)")
+                }
+                // Forward data regardless — PacketAnalyzerV2 in Dart handles parsing
+                synchronized(bufferLock) {
+                    dataBuffer.write(data)
+                    if (dataBuffer.size() > 200 * 1024) flushData()
                 }
                 return@TcpProxy
             }
 
-            // ── 5) New session starting with game handshake → start buffering ──
+            // ── 4) Already-identified old game session → ignore ──
+            if (validGameSessions.contains(source)) return@TcpProxy
+
+            // ── 5) New session starting with game handshake → mark as candidate ──
             if (data.size >= 6 &&
                 data[0] == gameHandshake[0] && data[1] == gameHandshake[1] &&
                 data[2] == gameHandshake[2] && data[3] == gameHandshake[3] &&
                 data[4] == gameHandshake[4] && data[5] == gameHandshake[5]) {
-                val buf = java.io.ByteArrayOutputStream()
-                buf.write(data)
-                pendingSessionData[source] = buf
-                Log.i("BlueMeter", "Buffering new pending session: $source")
+                gameSessionCandidates.add(source)
+                // Reset dataBuffer — new session means old data is stale
+                synchronized(bufferLock) {
+                    dataBuffer.reset()
+                    dataBuffer.write(data)
+                }
+                Log.i("BlueMeter", "Game session candidate: $source")
                 return@TcpProxy
             }
 

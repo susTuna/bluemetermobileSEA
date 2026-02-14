@@ -34,10 +34,10 @@ class PacketAnalyzerV2 {
 
       final packetSize = ByteData.sublistView(bytes, 0, 4).getUint32(0, Endian.big);
 
-      // Detect handshake at buffer head: first 4 bytes == 0x00633353
+      // Detect server signature at buffer head: first 4 bytes == 0x00633353
       // Full signature is 6 bytes: 00 63 33 53 42 00
       if (packetSize == 0x00633353) {
-        debugPrint("[BM] *** HANDSHAKE detected — new session! Clearing monsters. ***");
+        debugPrint("[BM] *** SERVER SIGNATURE detected — new session! Clearing monsters. ***");
         if (bytes.length >= 6) {
           final remaining = bytes.sublist(6);
           _buffer.clear();
@@ -47,6 +47,17 @@ class PacketAnalyzerV2 {
         } else {
           break; // Wait for more data
         }
+      }
+
+      // Detect game handshake: packetSize == 6 and next 2 bytes == 00 04
+      // This comes BEFORE the server signature when a new session starts.
+      // Clear the buffer to discard stale data from the previous session.
+      if (packetSize == 6 && bytes.length >= 6 && bytes[4] == 0x00 && bytes[5] == 0x04) {
+        debugPrint("[BM] *** GAME HANDSHAKE detected — resetting buffer for new session ***");
+        final remaining = bytes.sublist(6);
+        _buffer.clear();
+        _buffer.add(remaining);
+        continue;
       }
 
       if (packetSize < 4 || packetSize > 10000000) {
