@@ -11,12 +11,27 @@ class PacketAnalyzerV2 {
   final MessageAnalyzerV2 _messageAnalyzer;
   final LoggerService _logger = LoggerService();
   final DataStorage _storage;
+  final String tag;
 
-  PacketAnalyzerV2(DataStorage storage) 
+  PacketAnalyzerV2(DataStorage storage, {this.tag = 'game'}) 
       : _storage = storage,
-        _messageAnalyzer = MessageAnalyzerV2(storage);
+        _messageAnalyzer = MessageAnalyzerV2(storage, tag: tag);
 
   void processPacket(Uint8List chunk) {
+    // Detect reset marker (0xFFFFFFFF) sent by Kotlin when port 5003 session changes.
+    // The marker can appear at the beginning of a chunk.
+    if (chunk.length >= 4) {
+      final marker = ByteData.sublistView(chunk, 0, 4).getUint32(0, Endian.big);
+      if (marker == 0xFFFFFFFF) {
+        debugPrint("[BM] Port5003 session reset marker — clearing reassembly buffer");
+        _buffer.clear();
+        if (chunk.length > 4) {
+          _buffer.add(chunk.sublist(4));
+          _drainBuffer();
+        }
+        return;
+      }
+    }
     _buffer.add(chunk);
     _drainBuffer();
   }
@@ -59,6 +74,10 @@ class PacketAnalyzerV2 {
       }
 
       if (bytes.length < packetSize) {
+        // Log when waiting for data (only for non-tiny waits)
+        if (packetSize > 1000 && tag == 'port5003') {
+          debugPrint("[BM][$tag] Waiting for more data: have ${bytes.length}, need $packetSize");
+        }
         break; // Wait for more data
       }
 

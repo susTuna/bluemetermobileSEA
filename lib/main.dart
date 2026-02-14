@@ -153,7 +153,6 @@ class _OverlayWidgetState extends State<OverlayWidget> {
              if (event.containsKey('monsters')) {
                final monsters = event['monsters'] as List?;
                if (monsters != null) {
-                 debugPrint("[BM][Overlay] Received ${monsters.length} monsters from main");
                  final incomingUids = <Int64>{};
 
                  for (var m in monsters) {
@@ -854,8 +853,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _packetAnalyzer = PacketAnalyzerV2(DataStorage());
-    _otherSessionAnalyzer = PacketAnalyzerV2(DataStorage());
+    _packetAnalyzer = PacketAnalyzerV2(DataStorage(), tag: 'combat');
+    _otherSessionAnalyzer = PacketAnalyzerV2(DataStorage(), tag: 'port5003');
     
     // Setup communication port
     _receivePort = ReceivePort();
@@ -899,15 +898,6 @@ class _HomePageState extends State<HomePage> {
   Future<void> _updateOverlay() async {
     final storage = DataStorage();
     storage.checkTimeout();
-
-    final monsterCount = storage.monsterInfoDatas.length;
-    if (monsterCount > 0) {
-      final filteredCount = storage.monsterInfoDatas.values.where((m) => 
-        (m.maxHp != null && m.maxHp! > Int64.ZERO) ||
-        (m.level != null && m.level! > 0) ||
-        (m.name != null && m.name!.isNotEmpty)).length;
-      debugPrint("[BM] Storage: $monsterCount monsters total, $filteredCount with display info");
-    }
 
     final players = storage.fullDpsDatas.entries
     .where((e) => e.value.totalAttackDamage.toInt() > 0 || e.value.totalHeal.toInt() > 0 || e.value.totalTakenDamage.toInt() > 0)
@@ -971,8 +961,7 @@ class _HomePageState extends State<HomePage> {
     final monsters = storage.monsterInfoDatas.values
       .where((m) => 
         (m.maxHp != null && m.maxHp! > Int64.ZERO) ||
-        (m.level != null && m.level! > 0) ||
-        (m.name != null && m.name!.isNotEmpty))
+        (m.level != null && m.level! > 0))
       .map((m) => {
         'uid': m.uid.toString(),
         'templateId': m.templateId,

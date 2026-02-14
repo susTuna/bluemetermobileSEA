@@ -50,12 +50,11 @@ class NearbyView extends StatelessWidget {
             // Filter dead monsters
             if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) continue;
 
-            // Skip monsters without any useful combat info (gatherables, objects)
-            // A real monster should eventually have at least HP, level, or a name
+            // Skip monsters without combat stats (resonances, companions, gatherables)
+            // A real combat monster must have HP or level — name alone is not enough
             final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
             final hasLevel = m.level != null && m.level! > 0;
-            final hasName = m.name != null && m.name!.isNotEmpty;
-            if (!hasHp && !hasLevel && !hasName) continue;
+            if (!hasHp && !hasLevel) continue;
 
             final rawDist = _calculateDistance(myPos, m.position);
             sortedMonsters.add({'monster': m, 'dist': rawDist});

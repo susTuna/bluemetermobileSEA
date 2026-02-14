@@ -105,6 +105,10 @@ class PacketCaptureService : VpnService() {
                     activeGameSession = null
                     Log.i("BlueMeter", "Active game session closed: $closedSession")
                 }
+                if (closedSession == port5003Session) {
+                    port5003Session = null
+                    Log.i("BlueMeter", "Port 5003 session closed: $closedSession")
+                }
                 gameSessionCandidates.remove(closedSession)
                 validGameSessions.remove(closedSession)
                 return@TcpProxy
@@ -129,6 +133,10 @@ class PacketCaptureService : VpnService() {
                     if (source != port5003Session) {
                         port5003Session = source
                         upstreamBuffer.reset()
+                        // Send a reset marker so Dart clears its reassembly buffer
+                        // Marker: 4 bytes 0xFFFFFFFF (invalid packet size = reset signal)
+                        upstreamBuffer.write(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
+                        Log.i("BlueMeter", "Port 5003 session changed: $source")
                     }
                     upstreamBuffer.write(data)
                     if (upstreamBuffer.size() > 200 * 1024) flushData()

@@ -14,6 +14,7 @@ class MessageAnalyzerV2 {
   final DataStorage _storage;
   final ZstdCodec _zstd = ZstdCodec();
   final LoggerService _logger = LoggerService();
+  final String tag;
 
   // Message Types
   static const int _msgTypeCall = 1;
@@ -24,7 +25,7 @@ class MessageAnalyzerV2 {
   // Service UUID for Combat (0x0000000063335342)
   static final BigInt _combatServiceUuid = BigInt.parse("63335342", radix: 16);
 
-  MessageAnalyzerV2(DataStorage storage) : _storage = storage, _registry = MessageHandlerRegistry(storage);
+  MessageAnalyzerV2(DataStorage storage, {this.tag = 'game'}) : _storage = storage, _registry = MessageHandlerRegistry(storage);
 
   void process(Uint8List packetData) {
     if (packetData.isEmpty) return;
@@ -87,11 +88,11 @@ class MessageAnalyzerV2 {
       }
     }
 
-    debugPrint("[BM] WorldNtf methodId=0x${methodId.toRadixString(16)} (${msgPayload.length} bytes)");
+    debugPrint("[BM][$tag] WorldNtf methodId=0x${methodId.toRadixString(16)} (${msgPayload.length} bytes)");
 
     // Only log 0x15 and 0x16 prominently
     if (methodId == 0x15) {
-      debugPrint("[BM] ========== SyncContainerData (0x15) RECEIVED! ${msgPayload.length}B ==========");
+      debugPrint("[BM][$tag] ========== SyncContainerData (0x15) RECEIVED! ${msgPayload.length}B ==========");
     }
 
     final processor = _registry.getProcessor(methodId);
@@ -172,7 +173,7 @@ class MessageAnalyzerV2 {
     final methodId = reader.readUInt32BE();
     final payloadLen = reader.remaining;
 
-    debugPrint("[BM] Call svc=0x${serviceUuid.toRadixString(16)} seq=$callSeqId method=0x${methodId.toRadixString(16)} payload=${payloadLen}B");
+    debugPrint("[BM][$tag] Call svc=0x${serviceUuid.toRadixString(16)} seq=$callSeqId method=0x${methodId.toRadixString(16)} payload=${payloadLen}B");
   }
 
   void _processFrameDown(Uint8List data, bool isCompressed) {
