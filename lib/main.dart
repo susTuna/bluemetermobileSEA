@@ -7,6 +7,7 @@ import 'package:bluemeter_mobile/core/services/translation_service.dart';
 import 'package:bluemeter_mobile/views/dps_view.dart';
 import 'package:bluemeter_mobile/views/nearby_view.dart';
 import 'package:bluemeter_mobile/views/tools_view.dart';
+import 'package:bluemeter_mobile/views/hunt_view.dart';
 import 'package:bluemeter_mobile/widgets/player_detail_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -63,7 +64,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   String? _selectedPlayerUid; 
   
   // Navigation State
-  int _mainTabIndex = 0; // 0=DPS, 1=Nearby, 2=Tools
+  int _mainTabIndex = 0; // 0=DPS, 1=Nearby, 2=Tools, 3=Hunt
   int _dpsTabIndex = 0; // 0=DPS(sword), 1=Taken(shield), 2=Heal(cross)
 
   // Track window position
@@ -275,7 +276,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   }
 
   BoxDecoration get _windowDecoration => BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
+        color: Colors.black.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(0),
         // Border-left
         border: Border(
@@ -454,6 +455,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                       _buildSideTab(1, Icons.radar),
                       // Tab 2: Tools (Module/Optimizer)
                       _buildSideTab(2, Icons.build),
+                      // Tab 3: Hunt (Boss/Creature Tracker)
+                      _buildSideTab(3, Icons.track_changes),
                     ],
                   ),
                 ),
@@ -577,6 +580,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                             ),
                             NearbyView(isActive: _mainTabIndex == 1),
                             const ToolsView(),
+                            HuntView(isActive: _mainTabIndex == 3),
                           ],
                         ),
                       ),
