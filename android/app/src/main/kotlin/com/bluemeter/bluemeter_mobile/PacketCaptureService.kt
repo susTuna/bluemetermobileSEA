@@ -114,8 +114,28 @@ class PacketCaptureService : VpnService() {
                 return@TcpProxy
             }
 
-            // Skip upstream (client→server) data and HTTPS
-            if (source.startsWith("UP:")) return@TcpProxy
+            // ── 0b) Upstream (client→server): detect game handshake to mark candidate early ──
+            if (source.startsWith("UP:")) {
+                val sessionKey = source.removePrefix("UP:")
+                if (!gameSessionCandidates.contains(sessionKey) && 
+                    activeGameSession != sessionKey &&
+                    !validGameSessions.contains(sessionKey) &&
+                    !sessionKey.contains("destPort=5003") &&
+                    !sessionKey.contains("destPort=443") &&
+                    data.size >= 6 &&
+                    data[0] == gameHandshake[0] && data[1] == gameHandshake[1] &&
+                    data[2] == gameHandshake[2] && data[3] == gameHandshake[3] &&
+                    data[4] == gameHandshake[4] && data[5] == gameHandshake[5]) {
+                    gameSessionCandidates.add(sessionKey)
+                    if (activeGameSession == null) {
+                        synchronized(bufferLock) {
+                            dataBuffer.reset()
+                        }
+                    }
+                    Log.i("BlueMeter", "Game session candidate (from client handshake): $sessionKey (hasActive=${activeGameSession != null})")
+                }
+                return@TcpProxy
+            }
             if (source.contains("destPort=443")) return@TcpProxy
 
             // ── 1) Fast path: forward active game session data ──
@@ -189,7 +209,11 @@ class PacketCaptureService : VpnService() {
                 return@TcpProxy
             }
 
-            // ── 6) Unknown session → ignore (TcpProxy still forwards it to the game) ──
+            // ── 6) Unknown session → log first data for diagnosis ──
+            if (data.size >= 6) {
+                val hex = data.take(12).joinToString(" ") { "%02x".format(it) }
+                Log.i("BlueMeter", "Unknown session data: $source — first bytes: $hex (${data.size}B)")
+            }
         }
 
         val builder = Builder()

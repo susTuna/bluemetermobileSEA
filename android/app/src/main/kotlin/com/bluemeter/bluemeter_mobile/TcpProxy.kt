@@ -44,14 +44,22 @@ class TcpProxy(
                     session.state = SessionState.SYN_RECEIVED
                     session.clientSeq = packet.seqNum + 1
                     session.mySeq = 1000 // Random start
-                    // Log.d("TcpProxy", "New Session: $key")
+                    Log.i("BlueMeter", "TCP SYN → new session: $key")
                 } catch (e: IOException) {
-                    // Log.e("TcpProxy", "Failed to connect", e)
+                    Log.e("BlueMeter", "TCP SYN → connect failed: $key — ${e.message}")
                     sessions.remove(key)
                     return
                 }
             }
         } else if (session != null) {
+            // Handle RST
+            if (packet.flags and Packet.TCP_RST != 0) {
+                try { session.channel?.close() } catch (_: Exception) {}
+                onDataReceived("CLOSE:$key", ByteArray(0))
+                sessions.remove(key)
+                Log.i("BlueMeter", "TCP RST: $key")
+                return
+            }
             if (packet.flags and Packet.TCP_FIN != 0) {
                 session.state = SessionState.FIN_WAIT
                 // Send FIN to remote
