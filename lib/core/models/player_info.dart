@@ -9,6 +9,15 @@ class PlayerInfo {
   int? rankLevel;
   int? critical;
   int? lucky;
+  int? attack;
+  int? defense;
+  int? haste;
+  int? hastePct;
+  int? mastery;
+  int? masteryPct;
+  int? versatility;
+  int? versatilityPct;
+  int? seasonStrength;
   Int64? maxHp;
   Int64? hp;
   Map<String, double>? position;
@@ -23,6 +32,15 @@ class PlayerInfo {
     this.rankLevel,
     this.critical,
     this.lucky,
+    this.attack,
+    this.defense,
+    this.haste,
+    this.hastePct,
+    this.mastery,
+    this.masteryPct,
+    this.versatility,
+    this.versatilityPct,
+    this.seasonStrength,
     this.maxHp,
     this.hp,
     this.position,

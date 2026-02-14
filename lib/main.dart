@@ -575,7 +575,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                 _dpsTabIndex = index;
                               },
                             ),
-                            const NearbyView(),
+                            NearbyView(isActive: _mainTabIndex == 1),
                             const ToolsView(),
                           ],
                         ),
@@ -695,7 +695,10 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       ..totalAttackDamage = Int64(playerData['total'] ?? 0)
       ..totalHeal = Int64(playerData['totalHeal'] ?? 0)
       ..totalTakenDamage = Int64(playerData['totalTaken'] ?? 0)
-      ..activeCombatTicks = playerData['activeCombatTicks'] ?? 0;
+      ..activeCombatTicks = playerData['activeCombatTicks'] ?? 0
+      ..totalHitCount = playerData['totalHitCount'] ?? 0
+      ..critHitCount = playerData['critHitCount'] ?? 0
+      ..luckyHitCount = playerData['luckyHitCount'] ?? 0;
 
     if (playerData.containsKey('timeline') && playerData['timeline'] != null) {
       final timelineMap = playerData['timeline'] as Map<String, dynamic>;
@@ -726,8 +729,35 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       final skillData = SkillData(skillId: skillMap['skillId'])
         ..totalDamage = Int64(skillMap['totalDamage'] ?? 0)
         ..totalHeal = Int64(skillMap['totalHeal'] ?? 0)
-        ..hitCount = skillMap['hitCount'] ?? 0;
+        ..hitCount = skillMap['hitCount'] ?? 0
+        ..critHitCount = skillMap['critHitCount'] ?? 0
+        ..luckyHitCount = skillMap['luckyHitCount'] ?? 0;
       dpsData.skills[skillData.skillId] = skillData;
+    }
+
+    // Deserialize per-target breakdown
+    final targetsList = playerData['targets'] as List<dynamic>? ?? [];
+    for (var targetMap in targetsList) {
+      final targetUid = Int64.parseInt(targetMap['uid'] as String);
+      final targetName = targetMap['name'] as String?;
+      final breakdown = TargetBreakdown(targetUid: targetUid, name: targetName != null && targetName.isNotEmpty ? targetName : null)
+        ..totalDamage = Int64(targetMap['totalDamage'] ?? 0)
+        ..totalHeal = Int64(targetMap['totalHeal'] ?? 0)
+        ..hitCount = targetMap['hitCount'] ?? 0
+        ..critHitCount = targetMap['critHitCount'] ?? 0
+        ..luckyHitCount = targetMap['luckyHitCount'] ?? 0;
+      
+      final tSkills = targetMap['skills'] as List<dynamic>? ?? [];
+      for (var ts in tSkills) {
+        final sd = SkillData(skillId: ts['skillId'])
+          ..totalDamage = Int64(ts['totalDamage'] ?? 0)
+          ..totalHeal = Int64(ts['totalHeal'] ?? 0)
+          ..hitCount = ts['hitCount'] ?? 0
+          ..critHitCount = ts['critHitCount'] ?? 0
+          ..luckyHitCount = ts['luckyHitCount'] ?? 0;
+        breakdown.skills[sd.skillId] = sd;
+      }
+      dpsData.targets[targetUid] = breakdown;
     }
 
     final playerInfo = PlayerInfo(
@@ -739,7 +769,17 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       rankLevel: playerData['rankLevel'],
       critical: playerData['critical'],
       lucky: playerData['lucky'],
+      attack: playerData['attack'],
+      defense: playerData['defense'],
+      haste: playerData['haste'],
+      hastePct: playerData['hastePct'],
+      mastery: playerData['mastery'],
+      masteryPct: playerData['masteryPct'],
+      versatility: playerData['versatility'],
+      versatilityPct: playerData['versatilityPct'],
+      seasonStrength: playerData['seasonStrength'],
       maxHp: Int64(playerData['maxHp'] ?? 0),
+      hp: Int64(playerData['hp'] ?? 0),
     );
 
     final isMe = playerData['isMe'] == true;
@@ -894,6 +934,33 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  final Map<String, String> _targetNameCache = {};
+
+  String _resolveTargetName(Int64 uid) {
+    final key = uid.toString();
+    // Check cache first (survives monster death)
+    if (_targetNameCache.containsKey(key)) return _targetNameCache[key]!;
+    final storage = DataStorage();
+    final monster = storage.monsterInfoDatas[uid];
+    if (monster != null && monster.name != null && monster.name!.isNotEmpty) {
+      _targetNameCache[key] = monster.name!;
+      return monster.name!;
+    }
+    if (monster != null && monster.templateId != null) {
+      final n = MonsterNameService().getName(monster.templateId!);
+      if (n != null) {
+        _targetNameCache[key] = n;
+        return n;
+      }
+    }
+    final player = storage.playerInfoDatas[uid];
+    if (player != null && player.name != null && player.name!.isNotEmpty) {
+      _targetNameCache[key] = player.name!;
+      return player.name!;
+    }
+    return '';
+  }
+
   Future<void> _updateOverlay() async {
     final storage = DataStorage();
     storage.checkTimeout();
@@ -913,6 +980,8 @@ class _HomePageState extends State<HomePage> {
         'totalDamage': skillEntry.value.totalDamage.toInt(),
         'totalHeal': skillEntry.value.totalHeal.toInt(),
         'hitCount': skillEntry.value.hitCount,
+        'critHitCount': skillEntry.value.critHitCount,
+        'luckyHitCount': skillEntry.value.luckyHitCount,
       }).toList();
       
       // Convert timeline to serializable format
@@ -931,6 +1000,30 @@ class _HomePageState extends State<HomePage> {
         });
       }
 
+      // Convert per-target breakdown for selected player
+      List<Map<String, dynamic>>? targetsList;
+      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
+        targetsList = dpsData.targets.entries
+          .where((te) => te.key != uid) // filter out self-targets (self-heal)
+          .map((te) => {
+          'uid': te.key.toString(),
+          'name': _resolveTargetName(te.key),
+          'totalDamage': te.value.totalDamage.toInt(),
+          'totalHeal': te.value.totalHeal.toInt(),
+          'hitCount': te.value.hitCount,
+          'critHitCount': te.value.critHitCount,
+          'luckyHitCount': te.value.luckyHitCount,
+          'skills': te.value.skills.entries.map((se) => {
+            'skillId': se.key,
+            'totalDamage': se.value.totalDamage.toInt(),
+            'totalHeal': se.value.totalHeal.toInt(),
+            'hitCount': se.value.hitCount,
+            'critHitCount': se.value.critHitCount,
+            'luckyHitCount': se.value.luckyHitCount,
+          }).toList(),
+        }).toList();
+      }
+
       return {
         'uid': uid.toString(), // Add UID as string for serialization
         'name': info?.name ?? "Unknown",
@@ -943,14 +1036,28 @@ class _HomePageState extends State<HomePage> {
         'takenDps': dpsData.simpleTakenDps,
         'totalTaken': dpsData.totalTakenDamage.toInt(),
         'activeCombatTicks': dpsData.activeCombatTicks,
+        'totalHitCount': dpsData.totalHitCount,
+        'critHitCount': dpsData.critHitCount,
+        'luckyHitCount': dpsData.luckyHitCount,
         'level': info?.level ?? 0,
         'combatPower': info?.combatPower ?? 0,
         'rankLevel': info?.rankLevel ?? 0,
         'critical': info?.critical ?? 0,
         'lucky': info?.lucky ?? 0,
+        'attack': info?.attack ?? 0,
+        'defense': info?.defense ?? 0,
+        'haste': info?.haste ?? 0,
+        'hastePct': info?.hastePct ?? 0,
+        'mastery': info?.mastery ?? 0,
+        'masteryPct': info?.masteryPct ?? 0,
+        'versatility': info?.versatility ?? 0,
+        'versatilityPct': info?.versatilityPct ?? 0,
+        'seasonStrength': info?.seasonStrength ?? 0,
         'maxHp': info?.maxHp?.toInt() ?? 0,
+        'hp': info?.hp?.toInt() ?? 0,
         'skills': skillsList,
         'timeline': timelineMap,
+        'targets': targetsList,
       };
     }).toList();
 
@@ -1019,6 +1126,8 @@ class _HomePageState extends State<HomePage> {
         'totalDamage': skillEntry.value.totalDamage.toInt(),
         'totalHeal': skillEntry.value.totalHeal.toInt(),
         'hitCount': skillEntry.value.hitCount,
+        'critHitCount': skillEntry.value.critHitCount,
+        'luckyHitCount': skillEntry.value.luckyHitCount,
       }).toList();
       
       // Convert timeline to serializable format
@@ -1037,6 +1146,30 @@ class _HomePageState extends State<HomePage> {
         });
       }
 
+      // Convert per-target breakdown for selected player
+      List<Map<String, dynamic>>? targetsList;
+      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
+        targetsList = dpsData.targets.entries
+          .where((te) => te.key != uid) // filter out self-targets
+          .map((te) => {
+          'uid': te.key.toString(),
+          'name': _resolveTargetName(te.key),
+          'totalDamage': te.value.totalDamage.toInt(),
+          'totalHeal': te.value.totalHeal.toInt(),
+          'hitCount': te.value.hitCount,
+          'critHitCount': te.value.critHitCount,
+          'luckyHitCount': te.value.luckyHitCount,
+          'skills': te.value.skills.entries.map((se) => {
+            'skillId': se.key,
+            'totalDamage': se.value.totalDamage.toInt(),
+            'totalHeal': se.value.totalHeal.toInt(),
+            'hitCount': se.value.hitCount,
+            'critHitCount': se.value.critHitCount,
+            'luckyHitCount': se.value.luckyHitCount,
+          }).toList(),
+        }).toList();
+      }
+
       return {
         'uid': uid.toString(),
         'name': info?.name ?? "Unknown",
@@ -1049,14 +1182,28 @@ class _HomePageState extends State<HomePage> {
         'takenDps': dpsData.simpleTakenDps,
         'totalTaken': dpsData.totalTakenDamage.toInt(),
         'activeCombatTicks': dpsData.activeCombatTicks,
+        'totalHitCount': dpsData.totalHitCount,
+        'critHitCount': dpsData.critHitCount,
+        'luckyHitCount': dpsData.luckyHitCount,
         'level': info?.level ?? 0,
         'combatPower': info?.combatPower ?? 0,
         'rankLevel': info?.rankLevel ?? 0,
         'critical': info?.critical ?? 0,
         'lucky': info?.lucky ?? 0,
+        'attack': info?.attack ?? 0,
+        'defense': info?.defense ?? 0,
+        'haste': info?.haste ?? 0,
+        'hastePct': info?.hastePct ?? 0,
+        'mastery': info?.mastery ?? 0,
+        'masteryPct': info?.masteryPct ?? 0,
+        'versatility': info?.versatility ?? 0,
+        'versatilityPct': info?.versatilityPct ?? 0,
+        'seasonStrength': info?.seasonStrength ?? 0,
         'maxHp': info?.maxHp?.toInt() ?? 0,
+        'hp': info?.hp?.toInt() ?? 0,
         'skills': skillsList,
         'timeline': timelineMap,
+        'targets': targetsList,
       };
     }).toList();
 

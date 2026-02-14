@@ -95,10 +95,48 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                 if (isTargetPlayer) _storage.setPlayerLevel(targetUuid, reader.readInt32());
                 break;
               case AttrType.attrCri:
+              case AttrType.attrCriTotal:
                 if (isTargetPlayer) _storage.setPlayerCritical(targetUuid, reader.readInt32());
                 break;
               case AttrType.attrLucky:
+              case AttrType.attrLuckyTotal:
                 if (isTargetPlayer) _storage.setPlayerLucky(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrAttack:
+              case AttrType.attrAttackTotal:
+                if (isTargetPlayer) _storage.setPlayerAttack(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrDefense:
+              case AttrType.attrDefenseTotal:
+                if (isTargetPlayer) _storage.setPlayerDefense(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrHaste:
+              case AttrType.attrHasteTotal:
+                if (isTargetPlayer) _storage.setPlayerHaste(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrHastePct:
+              case AttrType.attrHastePctTotal:
+                if (isTargetPlayer) _storage.setPlayerHastePct(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrMastery:
+              case AttrType.attrMasteryTotal:
+                if (isTargetPlayer) _storage.setPlayerMastery(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrMasteryPct:
+              case AttrType.attrMasteryPctTotal:
+                if (isTargetPlayer) _storage.setPlayerMasteryPct(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrVersatility:
+              case AttrType.attrVersatilityTotal:
+                if (isTargetPlayer) _storage.setPlayerVersatility(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrVersatilityPct:
+              case AttrType.attrVersatilityPctTotal:
+                if (isTargetPlayer) _storage.setPlayerVersatilityPct(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrSeasonStrength:
+              case AttrType.attrSeasonStrengthTotal:
+                if (isTargetPlayer) _storage.setPlayerSeasonStrength(targetUuid, reader.readInt32());
                 break;
               case AttrType.attrHp:
                 hpUpdated = true;
@@ -156,6 +194,15 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           
           Int64 damageValue = Int64.ZERO;
           bool isLucky = false;
+          bool isCrit = false;
+          bool isCauseLucky = false;
+
+          // Extract crit/lucky from typeFlag (same as zdps)
+          if (d.hasTypeFlag()) {
+            isCrit = (d.typeFlag & 1) == 1;
+            isCauseLucky = (d.typeFlag & 0x4) == 0x4;
+          }
+
           if (d.hasValue()) {
             damageValue = d.value;
           } else if (d.hasLuckyValue()) {
@@ -179,6 +226,7 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                  damageValue, 
                  DateTime.now().millisecondsSinceEpoch,
                  skillId: d.ownerId.toString(),
+                 isCrit: isCrit,
                );
              }
           } else {
@@ -194,7 +242,8 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                     damageValue, 
                     DateTime.now().millisecondsSinceEpoch,
                     skillId: d.ownerId.toString(),
-                    isLucky: isLucky,
+                    isLucky: isLucky || isCauseLucky,
+                    isCrit: isCrit,
                   );
                 }
              }

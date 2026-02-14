@@ -236,7 +236,7 @@ class DataStorage extends ChangeNotifier {
     return _fullDpsDatas[uid];
   }
 
-  void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick, {String? skillId, bool isLucky = false}) {
+  void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick, {String? skillId, bool isLucky = false, bool isCrit = false}) {
     _onAction();
     
     // 1. Damage Dealt to Attacker
@@ -246,6 +246,7 @@ class DataStorage extends ChangeNotifier {
     attackerData.totalAttackDamage += damage;
     attackerData.totalHitCount++;
     if (isLucky) attackerData.luckyHitCount++;
+    if (isCrit) attackerData.critHitCount++;
     if (attackerData.startLoggedTick != null) {
        attackerData.activeCombatTicks = tick - attackerData.startLoggedTick!;
     }
@@ -256,6 +257,7 @@ class DataStorage extends ChangeNotifier {
       skill.totalDamage += damage;
       skill.hitCount++;
       if (isLucky) skill.luckyHitCount++;
+      if (isCrit) skill.critHitCount++;
     }
 
     // Per-target breakdown
@@ -263,11 +265,13 @@ class DataStorage extends ChangeNotifier {
     target.totalDamage += damage;
     target.hitCount++;
     if (isLucky) target.luckyHitCount++;
+    if (isCrit) target.critHitCount++;
     if (skillId != null && skillId.isNotEmpty) {
       var tSkill = target.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
       tSkill.totalDamage += damage;
       tSkill.hitCount++;
       if (isLucky) tSkill.luckyHitCount++;
+      if (isCrit) tSkill.critHitCount++;
     }
 
     // Timeline
@@ -297,7 +301,7 @@ class DataStorage extends ChangeNotifier {
     _scheduleNotify();
   }
 
-  void addHealing(Int64 healerUid, Int64 targetUid, Int64 healAmount, int tick, {String? skillId}) {
+  void addHealing(Int64 healerUid, Int64 targetUid, Int64 healAmount, int tick, {String? skillId, bool isCrit = false}) {
     _onAction();
     
     // 1. Heal Output to Healer
@@ -410,6 +414,60 @@ class DataStorage extends ChangeNotifier {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.lucky = value;
     DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
+  }
+
+  void setPlayerAttack(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.attack = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerDefense(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.defense = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerHaste(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.haste = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerHastePct(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.hastePct = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerMastery(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.mastery = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerMasteryPct(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.masteryPct = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerVersatility(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.versatility = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerVersatilityPct(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.versatilityPct = value;
+    _scheduleNotify();
+  }
+
+  void setPlayerSeasonStrength(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.seasonStrength = value;
     _scheduleNotify();
   }
 

@@ -39,11 +39,24 @@ class PlayerDetailCard extends StatefulWidget {
   State<PlayerDetailCard> createState() => _PlayerDetailCardState();
 }
 
-class _PlayerDetailCardState extends State<PlayerDetailCard> {
+class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerProviderStateMixin {
   bool _showDps = true;
   bool _showHps = true;
   bool _showTaken = true;
   Int64? _selectedTargetUid;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,23 +66,20 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
       name = TranslationService().translate('Me');
     }
 
-    // Compute filtered data based on selected target
     final filteredSkills = _getFilteredSkills();
     final filteredDamage = _getFilteredDamage();
     final filteredHeal = _getFilteredHeal();
-    final filteredHitCount = _getFilteredHitCount();
-    final filteredLuckyHits = _getFilteredLuckyHits();
 
     return Material(
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
-          border: Border.all(color: Colors.white10),
+          color: const Color(0xFF12141A),
+          border: Border.all(color: const Color(0xFF2A2E38)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.6),
+              blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
@@ -78,62 +88,51 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(name, cls),
-            const Divider(height: 1, color: Colors.white10),
-            if (widget.playerInfo != null) _buildPlayerStats(widget.playerInfo!, filteredHitCount, filteredLuckyHits),
+            _buildCombatStats(filteredDamage, filteredHeal),
+            if (widget.dpsData.targets.isNotEmpty) _buildTargetFilter(),
+            Container(
+              height: 24,
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFF2A2E38), width: 0.5)),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                labelPadding: EdgeInsets.zero,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorColor: Colors.blueAccent,
+                indicatorWeight: 2,
+                dividerColor: Colors.transparent,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white38,
+                labelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                tabs: [
+                  Tab(text: TranslationService().translate('Skills')),
+                  Tab(text: TranslationService().translate('Chart')),
+                ],
+              ),
+            ),
             Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: TabBarView(
+                controller: _tabController,
                 children: [
-                  // Left: Stats + Chart
-                  Expanded(
-                    flex: 5,
-                    child: Column(
-                      children: [
-                        _buildCombatStats(filteredDamage, filteredHeal),
-                        if (widget.dpsData.targets.isNotEmpty)
-                          _buildTargetFilter(),
-                        if (widget.dpsData.timeline.isNotEmpty)
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
-                              child: PlayerDpsChart(
-                                dpsData: widget.dpsData,
-                                height: double.infinity,
-                                showDps: _showDps,
-                                showHps: _showHps,
-                                showTaken: _showTaken,
-                              ),
-                            ),
+                  _buildSkillsList(filteredSkills),
+                  widget.dpsData.timeline.isNotEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 4, 4, 8),
+                          child: PlayerDpsChart(
+                            dpsData: widget.dpsData,
+                            height: double.infinity,
+                            showDps: _showDps,
+                            showHps: _showHps,
+                            showTaken: _showTaken,
                           ),
-                      ],
-                    ),
-                  ),
-                  const VerticalDivider(width: 1, color: Colors.white10),
-                  // Right: Skills
-                  Expanded(
-                    flex: 4,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                TranslationService().translate('Skills'),
-                                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                              ),
-                              Text(
-                                TranslationService().translate('Details'),
-                                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                              ),
-                            ],
+                        )
+                      : Center(
+                          child: Text(
+                            TranslationService().translate('NoData'),
+                            style: const TextStyle(color: Colors.white24, fontSize: 11),
                           ),
                         ),
-                        Expanded(child: _buildSkillsList(filteredSkills)),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -170,7 +169,18 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     return widget.dpsData.targets[_selectedTargetUid]?.luckyHitCount ?? 0;
   }
 
+  int _getFilteredCritHits() {
+    if (_selectedTargetUid == null) return widget.dpsData.critHitCount;
+    return widget.dpsData.targets[_selectedTargetUid]?.critHitCount ?? 0;
+  }
+
   String _getTargetName(Int64 uid) {
+    // Use pre-resolved name from serialization (overlay has no DataStorage data)
+    final breakdown = widget.dpsData.targets[uid];
+    if (breakdown?.name != null && breakdown!.name!.isNotEmpty) {
+      return breakdown.name!;
+    }
+    // Fallback: try DataStorage (works in main app, not overlay)
     final monster = DataStorage().monsterInfoDatas[uid];
     if (monster != null && monster.name != null && monster.name!.isNotEmpty) {
       return monster.name!;
@@ -183,79 +193,123 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     if (player != null && player.name != null && player.name!.isNotEmpty) {
       return player.name!;
     }
-    return "#${uid.toInt()}";
+    return "Entity";
   }
 
+  // --- Header ---
+
   Widget _buildHeader(String name, Classes cls) {
+    final info = widget.playerInfo;
+    final hitCount = _getFilteredHitCount();
+    final critHits = _getFilteredCritHits();
+    final luckyHits = _getFilteredLuckyHits();
+    final critRate = hitCount > 0 ? (critHits / hitCount * 100) : 0.0;
+    final luckyRate = hitCount > 0 ? (luckyHits / hitCount * 100) : 0.0;
+
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: widget.onDragStart,
       onPanUpdate: widget.onDragUpdate,
       onPanEnd: widget.onDragEnd,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            if (cls != Classes.unknown) ...[
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Image.asset(
-                  cls.iconPath,
-                  width: 24,
-                  height: 24,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.help, color: Colors.white24, size: 24),
-                ),
-              ),
-              const SizedBox(width: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              _getClassColor(cls).withValues(alpha: 0.12),
+              Colors.transparent,
             ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+          ),
+          border: const Border(bottom: BorderSide(color: Color(0xFF2A2E38), width: 0.5)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Row 1: Icon + Name + stat chips + close
+            Row(
+              children: [
+                if (cls != Classes.unknown) ...[
+                  Container(
+                    padding: const EdgeInsets.all(1.5),
+                    decoration: BoxDecoration(
+                      color: _getClassColor(cls).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Image.asset(
+                      cls.iconPath,
+                      width: 16,
+                      height: 16,
+                      errorBuilder: (context, error, stackTrace) =>
+                          Icon(Icons.person, color: _getClassColor(cls), size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                // Name + class badge
+                Flexible(
+                  flex: 0,
+                  child: Text(
                     name,
                     style: TextStyle(
                       color: _getClassColor(cls),
-                      fontSize: 15,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (cls != Classes.unknown)
-                    Text(
-                      cls.name,
-                      style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 11,
-                      ),
-                    ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      const Icon(Icons.timer_outlined, size: 10, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatDuration(widget.dpsData.activeCombatTicks),
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
+                ),
+                if (cls != Classes.unknown) ...[
+                  const SizedBox(width: 3),
+                  Text(
+                    cls.name,
+                    style: TextStyle(color: _getClassColor(cls).withValues(alpha: 0.5), fontSize: 7),
                   ),
                 ],
-              ),
+                const SizedBox(width: 6),
+                // Stat labels
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _buildStatLabels(info),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: widget.onClose,
+                  child: const Icon(Icons.close, color: Colors.white38, size: 14),
+                ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-              onPressed: widget.onClose,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              splashRadius: 20,
+            const SizedBox(height: 2),
+            // Row 2: Timer + Hits + HP bar + Crit/Lucky rates
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, size: 8, color: Colors.white.withValues(alpha: 0.35)),
+                const SizedBox(width: 2),
+                Text(
+                  _formatDuration(widget.dpsData.activeCombatTicks),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8),
+                ),
+                if (widget.dpsData.totalHitCount > 0) ...[
+                  const SizedBox(width: 5),
+                  Text(
+                    '${widget.dpsData.totalHitCount}h',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 8),
+                  ),
+                ],
+                if (info != null && info.maxHp != null && info.maxHp! > Int64.ZERO) ...[
+                  const SizedBox(width: 6),
+                  _buildHpMiniBar(info),
+                ],
+                const Spacer(),
+                if (hitCount > 0) ...[
+                  _buildRateBadge('C', '${critRate.toStringAsFixed(1)}%', const Color(0xFFFF5252)),
+                  const SizedBox(width: 3),
+                  _buildRateBadge('L', '${luckyRate.toStringAsFixed(1)}%', const Color(0xFF69F0AE)),
+                ],
+              ],
             ),
           ],
         ),
@@ -263,57 +317,102 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     );
   }
 
-  Widget _buildPlayerStats(PlayerInfo info, int hitCount, int luckyHits) {
-    final stats = <Widget>[];
-    
+  List<Widget> _buildStatLabels(PlayerInfo? info) {
+    if (info == null) return [];
+    final labels = <Widget>[];
+
+    void addStat(String label, int? value, Color color, {int? pct}) {
+      if (value == null || value <= 0) return;
+      String text = _formatNumber(value);
+      if (pct != null && pct > 0) text += '(${(pct / 100.0).toStringAsFixed(1)}%)';
+      labels.add(Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: '$label ',
+                style: TextStyle(color: color.withValues(alpha: 0.5), fontSize: 7, fontWeight: FontWeight.bold),
+              ),
+              TextSpan(
+                text: text,
+                style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ));
+    }
+
     if (info.level != null && info.level! > 0) {
-      stats.add(_buildStatBadge("${TranslationService().translate('Lv')}.${info.level}", Colors.blueGrey));
+      addStat('Lv', info.level, const Color(0xFF64B5F6));
     }
     if (info.combatPower != null && info.combatPower! > 0) {
-      stats.add(_buildStatBadge("${TranslationService().translate('CS')}: ${_formatNumber(info.combatPower!)}", Colors.amber));
+      addStat('CP', info.combatPower, const Color(0xFFFFD54F));
     }
-    if (info.critical != null && info.critical! > 0) {
-      stats.add(_buildStatBadge("${TranslationService().translate('Crit')}: ${info.critical}", Colors.redAccent));
-    }
-    if (info.lucky != null && info.lucky! > 0) {
-      stats.add(_buildStatBadge("${TranslationService().translate('Luck')}: ${info.lucky}", Colors.greenAccent));
-    }
-    if (hitCount > 0) {
-      final luckyRate = luckyHits / hitCount * 100;
-      stats.add(_buildStatBadge("Lucky: ${luckyRate.toStringAsFixed(1)}%", Colors.amber.shade300));
-    }
+    addStat('ATK', info.attack, const Color(0xFFFF8A65));
+    addStat('DEF', info.defense, const Color(0xFF90CAF9));
+    addStat('Crit', info.critical, const Color(0xFFFF5252));
+    addStat('Luck', info.lucky, const Color(0xFF69F0AE));
+    addStat('Haste', info.haste, const Color(0xFF80DEEA), pct: info.hastePct);
+    addStat('Mast', info.mastery, const Color(0xFFCE93D8), pct: info.masteryPct);
+    addStat('Vers', info.versatility, const Color(0xFFA5D6A7), pct: info.versatilityPct);
+    addStat('SSt', info.seasonStrength, const Color(0xFFFFCC80));
 
-    if (stats.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: Colors.black12,
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: stats,
-      ),
-    );
+    return labels;
   }
 
-  Widget _buildStatBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
+  Widget _buildHpMiniBar(PlayerInfo info) {
+    final hpPct = (info.hp != null && info.maxHp != null && info.maxHp! > Int64.ZERO)
+        ? (info.hp!.toDouble() / info.maxHp!.toDouble())
+        : 0.0;
+    final hpColor = hpPct < 0.3 ? Colors.redAccent : (hpPct < 0.6 ? Colors.orangeAccent : const Color(0xFF69F0AE));
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.favorite, size: 7, color: hpColor.withValues(alpha: 0.6)),
+        const SizedBox(width: 2),
+        SizedBox(
+          width: 24,
+          height: 3,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(1.5),
+            child: LinearProgressIndicator(
+              value: hpPct,
+              backgroundColor: Colors.white10,
+              valueColor: AlwaysStoppedAnimation<Color>(hpColor),
+            ),
+          ),
         ),
+        const SizedBox(width: 2),
+        Text(
+          '${(hpPct * 100).toStringAsFixed(0)}%',
+          style: TextStyle(color: hpColor.withValues(alpha: 0.7), fontSize: 7),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRateBadge(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 7, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 1),
+          Text(value, style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }
+
+  // --- Combat Stats (DPS/HPS/Taken) ---
 
   Widget _buildCombatStats(Int64 filteredDamage, Int64 filteredHeal) {
     double seconds = widget.dpsData.activeCombatTicks / 1000.0;
@@ -322,108 +421,45 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     final filteredHps = filteredHeal.toDouble() / seconds;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       child: Row(
         children: [
-          Expanded(child: _buildStatBox(
-            label: "DPS",
-            value: _selectedTargetUid != null ? filteredDps : widget.dpsValue,
-            total: filteredDamage.toInt(),
-            color: Colors.redAccent,
-            icon: Icons.bolt,
-            isActive: _showDps,
-            onTap: () => setState(() => _showDps = !_showDps),
-          )),
-          const SizedBox(width: 6),
-          Expanded(child: _buildStatBox(
-            label: "HPS",
-            value: _selectedTargetUid != null ? filteredHps : widget.hpsValue,
-            total: filteredHeal.toInt(),
-            color: Colors.greenAccent,
-            icon: Icons.favorite,
-            isActive: _showHps,
-            onTap: () => setState(() => _showHps = !_showHps),
-          )),
-          const SizedBox(width: 6),
-          Expanded(child: _buildStatBox(
-            label: TranslationService().translate('Received'),
-            value: widget.takenDpsValue,
-            total: widget.dpsData.totalTakenDamage.toInt(),
-            color: Colors.orangeAccent,
-            icon: Icons.shield,
-            isActive: _showTaken,
-            onTap: () => setState(() => _showTaken = !_showTaken),
-          )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTargetFilter() {
-    final targetEntries = widget.dpsData.targets.entries.toList()
-      ..sort((a, b) => b.value.totalDamage.compareTo(a.value.totalDamage));
-    if (targetEntries.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _buildTargetChip(
-            label: TranslationService().translate('All'),
-            isSelected: _selectedTargetUid == null,
-            onTap: () => setState(() => _selectedTargetUid = null),
+          Expanded(
+            child: _buildStatBox(
+              label: "DPS",
+              value: _selectedTargetUid != null ? filteredDps : widget.dpsValue,
+              total: filteredDamage.toInt(),
+              color: const Color(0xFFFF5252),
+              icon: Icons.bolt,
+              isActive: _showDps,
+              onTap: () => setState(() => _showDps = !_showDps),
+            ),
           ),
           const SizedBox(width: 4),
-          ...targetEntries.take(8).map((e) {
-            final name = _getTargetName(e.key);
-            final short = name.length > 10 ? '${name.substring(0, 10)}…' : name;
-            return Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: _buildTargetChip(
-                label: short,
-                isSelected: _selectedTargetUid == e.key,
-                onTap: () => setState(() => _selectedTargetUid = e.key),
-                damage: e.value.totalDamage,
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTargetChip({
-    required String label, required bool isSelected,
-    required VoidCallback onTap, Int64? damage,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? Colors.blueAccent.withValues(alpha: 0.6) : Colors.white12,
+          Expanded(
+            child: _buildStatBox(
+              label: "HPS",
+              value: _selectedTargetUid != null ? filteredHps : widget.hpsValue,
+              total: filteredHeal.toInt(),
+              color: const Color(0xFF69F0AE),
+              icon: Icons.favorite,
+              isActive: _showHps,
+              onTap: () => setState(() => _showHps = !_showHps),
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label,
-              style: TextStyle(
-                color: isSelected ? Colors.blueAccent : Colors.white54,
-                fontSize: 9, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              )),
-            if (damage != null && damage > Int64.ZERO) ...[
-              const SizedBox(width: 3),
-              Text(_formatNumber(damage.toInt()),
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 8)),
-            ],
-          ],
-        ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildStatBox(
+              label: "TAKEN",
+              value: widget.takenDpsValue,
+              total: widget.dpsData.totalTakenDamage.toInt(),
+              color: const Color(0xFFFFB74D),
+              icon: Icons.shield,
+              isActive: _showTaken,
+              onTap: () => setState(() => _showTaken = !_showTaken),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -443,74 +479,150 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
         duration: const Duration(milliseconds: 200),
         opacity: isActive ? 1.0 : 0.3,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
+            border: Border.all(color: color.withValues(alpha: 0.15)),
           ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 9, color: color),
-                    const SizedBox(width: 2),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 8,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 8, color: color.withValues(alpha: 0.7)),
+                  const SizedBox(width: 2),
+                  Text(label, style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 7, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                ],
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _formatNumber(value),
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    _formatNumber(value),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Text(
-                  "${TranslationService().translate('Total')}: ${_formatNumber(total)}",
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 7,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              Text(
+                _formatNumber(total),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 7),
+              ),
+            ],
           ),
+        ),
       ),
     );
   }
+
+  // --- Target Filter ---
+
+  Widget _buildTargetFilter() {
+    // Filter out self from targets (self-heals)
+    final selfUid = widget.dpsData.uid;
+    final targetEntries = widget.dpsData.targets.entries
+      .where((e) => e.key != selfUid)
+      .toList()
+      ..sort((a, b) => b.value.totalDamage.compareTo(a.value.totalDamage));
+    if (targetEntries.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFF2A2E38), width: 0.5)),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildTargetChip(
+            label: TranslationService().translate('All'),
+            isSelected: _selectedTargetUid == null,
+            onTap: () => setState(() => _selectedTargetUid = null),
+          ),
+          const SizedBox(width: 3),
+          ...targetEntries.take(10).map((e) {
+            final name = _getTargetName(e.key);
+            final short = name.length > 12 ? '${name.substring(0, 12)}...' : name;
+            final pct = widget.dpsData.totalAttackDamage > Int64.ZERO
+                ? (e.value.totalDamage.toDouble() / widget.dpsData.totalAttackDamage.toDouble() * 100)
+                : 0.0;
+            return Padding(
+              padding: const EdgeInsets.only(right: 3),
+              child: _buildTargetChip(
+                label: short,
+                isSelected: _selectedTargetUid == e.key,
+                onTap: () => setState(() => _selectedTargetUid = e.key),
+                pct: pct,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTargetChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    double? pct,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blueAccent.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? Colors.blueAccent.withValues(alpha: 0.5) : Colors.white10,
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.blueAccent : Colors.white54,
+                fontSize: 8,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            if (pct != null && pct > 0) ...[
+              const SizedBox(width: 3),
+              Text(
+                '${pct.toStringAsFixed(0)}%',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 7),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Skills List ---
 
   Widget _buildSkillsList(Map<String, SkillData> skills) {
     if (skills.isEmpty) {
       return Center(
         child: Text(
           TranslationService().translate('NoSkillData'),
-          style: const TextStyle(color: Colors.white24, fontSize: 12),
+          style: const TextStyle(color: Colors.white24, fontSize: 11),
         ),
       );
     }
 
-    // Aggregate skills by name
     final Map<String, _AggregatedSkill> aggregatedSkills = {};
-    
+
     for (var skill in skills.values) {
       final name = getSkillName(int.tryParse(skill.skillId) ?? 0);
-      
+
       final damage = _showDps ? skill.totalDamage : Int64.ZERO;
       final heal = _showHps ? skill.totalHeal : Int64.ZERO;
-      
+
       if (damage == Int64.ZERO && heal == Int64.ZERO) continue;
 
       if (aggregatedSkills.containsKey(name)) {
@@ -518,12 +630,14 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
         existing.totalDamage += damage;
         existing.totalHeal += heal;
         existing.hitCount += skill.hitCount;
+        existing.critHitCount += skill.critHitCount;
         existing.luckyHitCount += skill.luckyHitCount;
       } else {
         aggregatedSkills[name] = _AggregatedSkill(
           totalDamage: damage,
           totalHeal: heal,
           hitCount: skill.hitCount,
+          critHitCount: skill.critHitCount,
           luckyHitCount: skill.luckyHitCount,
         );
       }
@@ -541,55 +655,51 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
       (sum, entry) => sum + entry.value.totalDamage.toInt() + entry.value.totalHeal.toInt(),
     );
 
-    // Find max value for bar scaling
-    final maxSkillTotal = sortedSkills.isNotEmpty 
-        ? (sortedSkills.first.value.totalDamage.toInt() + sortedSkills.first.value.totalHeal.toInt()) 
+    final maxSkillTotal = sortedSkills.isNotEmpty
+        ? (sortedSkills.first.value.totalDamage.toInt() + sortedSkills.first.value.totalHeal.toInt())
         : 1;
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       itemCount: sortedSkills.length,
       itemBuilder: (context, index) {
         final entry = sortedSkills[index];
         final name = entry.key;
         final skill = entry.value;
         final skillTotal = skill.totalDamage.toInt() + skill.totalHeal.toInt();
-        final percentage = totalDamageAndHeal > 0 
-            ? (skillTotal / totalDamageAndHeal * 100) 
-            : 0.0;
-        
-        // Bar width relative to the highest skill
+        final percentage = totalDamageAndHeal > 0 ? (skillTotal / totalDamageAndHeal * 100) : 0.0;
         final barWidthFactor = maxSkillTotal > 0 ? (skillTotal / maxSkillTotal) : 0.0;
 
         final isHeal = skill.totalHeal > skill.totalDamage;
-        final color = isHeal ? Colors.greenAccent : Colors.redAccent;
+        final color = isHeal ? const Color(0xFF69F0AE) : const Color(0xFFFF5252);
         final avg = skill.hitCount > 0 ? skillTotal / skill.hitCount : 0;
+        final critPct = skill.hitCount > 0 ? (skill.critHitCount / skill.hitCount * 100) : 0.0;
         final luckyPct = skill.hitCount > 0 ? (skill.luckyHitCount / skill.hitCount * 100) : 0.0;
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 2),
-          height: 30,
+          margin: const EdgeInsets.only(bottom: 1),
+          height: 28,
           child: Stack(
             children: [
-              // Background Bar
               FractionallySizedBox(
                 widthFactor: barWidthFactor,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
+                    gradient: LinearGradient(
+                      colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0.05)],
+                    ),
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
               ),
-              // Content
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         name,
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500),
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w500),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -597,17 +707,42 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Row(children: [
-                          Text(_formatNumber(skillTotal),
-                            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 3),
-                          Text("(${percentage.toStringAsFixed(1)}%)",
-                            style: const TextStyle(color: Colors.white54, fontSize: 9)),
-                        ]),
-                        Text(
-                          "${skill.hitCount} ${TranslationService().translate('Hits')} • ${TranslationService().translate('Avg')}: ${_formatNumber(avg)}"
-                          "${luckyPct > 0 ? ' • L:${luckyPct.toStringAsFixed(0)}%' : ''}",
-                          style: const TextStyle(color: Colors.white38, fontSize: 8),
+                        Row(
+                          children: [
+                            Text(
+                              _formatNumber(skillTotal),
+                              style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${percentage.toStringAsFixed(1)}%',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              '${skill.hitCount}h',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 7),
+                            ),
+                            Text(
+                              ' ~${_formatNumber(avg)}',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 7),
+                            ),
+                            if (critPct > 0) ...[
+                              Text(
+                                ' C:${critPct.toStringAsFixed(0)}%',
+                                style: TextStyle(color: const Color(0xFFFF5252).withValues(alpha: 0.5), fontSize: 7),
+                              ),
+                            ],
+                            if (luckyPct > 0) ...[
+                              Text(
+                                ' L:${luckyPct.toStringAsFixed(0)}%',
+                                style: TextStyle(color: const Color(0xFF69F0AE).withValues(alpha: 0.5), fontSize: 7),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -621,12 +756,28 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     );
   }
 
+  // --- Helpers ---
+
   Color _getClassColor(Classes cls) {
-    switch (cls.role) {
-      case Role.tank: return Colors.blueAccent;
-      case Role.heal: return Colors.greenAccent;
-      case Role.dps: return Colors.redAccent;
-      default: return Colors.grey;
+    switch (cls) {
+      case Classes.stormblade:
+        return const Color(0xFF64B5F6);
+      case Classes.frostMage:
+        return const Color(0xFFCE93D8);
+      case Classes.windKnight:
+        return const Color(0xFF81C784);
+      case Classes.verdantOracle:
+        return const Color(0xFFA5D6A7);
+      case Classes.heavyGuardian:
+        return const Color(0xFFFFB74D);
+      case Classes.marksman:
+        return const Color(0xFFFFF176);
+      case Classes.shieldKnight:
+        return const Color(0xFF7986CB);
+      case Classes.soulMusician:
+        return const Color(0xFFF48FB1);
+      default:
+        return Colors.grey;
     }
   }
 
@@ -653,12 +804,14 @@ class _AggregatedSkill {
   Int64 totalDamage;
   Int64 totalHeal;
   int hitCount;
+  int critHitCount;
   int luckyHitCount;
 
   _AggregatedSkill({
     required this.totalDamage,
     required this.totalHeal,
     required this.hitCount,
+    required this.critHitCount,
     required this.luckyHitCount,
   });
 }

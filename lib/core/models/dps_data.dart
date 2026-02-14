@@ -5,6 +5,7 @@ class SkillData {
   Int64 totalDamage = Int64.ZERO;
   Int64 totalHeal = Int64.ZERO;
   int hitCount = 0;
+  int critHitCount = 0;
   int luckyHitCount = 0;
 
   SkillData({required this.skillId});
@@ -12,13 +13,15 @@ class SkillData {
 
 class TargetBreakdown {
   final Int64 targetUid;
+  String? name;
   Int64 totalDamage = Int64.ZERO;
   Int64 totalHeal = Int64.ZERO;
   int hitCount = 0;
+  int critHitCount = 0;
   int luckyHitCount = 0;
   final Map<String, SkillData> skills = {};
 
-  TargetBreakdown({required this.targetUid});
+  TargetBreakdown({required this.targetUid, this.name});
 }
 
 class TimeSlice {
@@ -44,6 +47,7 @@ class DpsData {
 
   // Hit tracking for crit/luck rates
   int totalHitCount = 0;
+  int critHitCount = 0;
   int luckyHitCount = 0;
 
   // Skill tracking
@@ -57,6 +61,7 @@ class DpsData {
 
   DpsData({required this.uid});
 
+  double get critRate => totalHitCount > 0 ? critHitCount / totalHitCount : 0.0;
   double get luckyRate => totalHitCount > 0 ? luckyHitCount / totalHitCount : 0.0;
 
   double get dps {
