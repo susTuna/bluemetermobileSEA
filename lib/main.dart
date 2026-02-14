@@ -153,7 +153,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
              if (event.containsKey('monsters')) {
                final monsters = event['monsters'] as List?;
                if (monsters != null) {
-                //  debugPrint("[Overlay Isolate] Received ${monsters.length} monsters.");
+                 debugPrint("[BM][Overlay] Received ${monsters.length} monsters from main");
                  final incomingUids = <Int64>{};
 
                  for (var m in monsters) {
@@ -900,8 +900,14 @@ class _HomePageState extends State<HomePage> {
     final storage = DataStorage();
     storage.checkTimeout();
 
-    // _logger.log("UpdateOverlay - CurrentPlayerUUID: ${storage.currentPlayerUuid}");
-    // _logger.log("UpdateOverlay - fullDpsDatas count: ${storage.fullDpsDatas.length}");
+    final monsterCount = storage.monsterInfoDatas.length;
+    if (monsterCount > 0) {
+      final filteredCount = storage.monsterInfoDatas.values.where((m) => 
+        (m.maxHp != null && m.maxHp! > Int64.ZERO) ||
+        (m.level != null && m.level! > 0) ||
+        (m.name != null && m.name!.isNotEmpty)).length;
+      debugPrint("[BM] Storage: $monsterCount monsters total, $filteredCount with display info");
+    }
 
     final players = storage.fullDpsDatas.entries
     .where((e) => e.value.totalAttackDamage.toInt() > 0 || e.value.totalHeal.toInt() > 0 || e.value.totalTakenDamage.toInt() > 0)
@@ -961,8 +967,13 @@ class _HomePageState extends State<HomePage> {
 
     final combatDuration = storage.currentCombatDuration;
 
-    // Serialize monsters
-    final monsters = storage.monsterInfoDatas.values.map((m) => {
+    // Serialize monsters — only send monsters with useful display info
+    final monsters = storage.monsterInfoDatas.values
+      .where((m) => 
+        (m.maxHp != null && m.maxHp! > Int64.ZERO) ||
+        (m.level != null && m.level! > 0) ||
+        (m.name != null && m.name!.isNotEmpty))
+      .map((m) => {
         'uid': m.uid.toString(),
         'templateId': m.templateId,
         'name': m.name,
@@ -975,8 +986,6 @@ class _HomePageState extends State<HomePage> {
     }).toList();
 
     // Debug: Log monster count being sent
-    // _logger.log("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
-    // debugPrint("[Main Isolate] _updateOverlay sending ${monsters.length} monsters.");
 
     // Current Player Position
     final myUid = storage.currentPlayerUuid;

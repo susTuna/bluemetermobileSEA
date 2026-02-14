@@ -61,6 +61,7 @@ class TcpProxy(
                 // Ack the FIN
                 session.clientSeq = packet.seqNum + 1
                 sendTcpPacket(session, Packet.TCP_ACK, null, outputQueue)
+                onDataReceived("CLOSE:$key", ByteArray(0))
                 sessions.remove(key) 
                 return
             }
@@ -83,6 +84,7 @@ class TcpProxy(
                             onDataReceived("UP:${key}", payload)
                         } catch (e: IOException) {
                             // Log.e("TcpProxy", "Write error", e)
+                            onDataReceived("CLOSE:$key", ByteArray(0))
                             sessions.remove(key)
                         }
                     }
@@ -118,6 +120,7 @@ class TcpProxy(
                     if (read == -1) {
                         // Remote closed
                         key.cancel()
+                        onDataReceived("CLOSE:$sessionKey", ByteArray(0))
                         sessions.remove(sessionKey)
                         // Send FIN to client
                         sendTcpPacket(session, Packet.TCP_FIN or Packet.TCP_ACK, null, outputQueue)
@@ -136,6 +139,7 @@ class TcpProxy(
             } catch (e: IOException) {
                 // Log.e("TcpProxy", "Selector error", e)
                 key.cancel()
+                onDataReceived("CLOSE:$sessionKey", ByteArray(0))
                 sessions.remove(sessionKey)
             }
         }

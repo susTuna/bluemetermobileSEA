@@ -36,28 +36,19 @@ class PacketAnalyzerV2 {
 
       // Detect server signature at buffer head: first 4 bytes == 0x00633353
       // Full signature is 6 bytes: 00 63 33 53 42 00
+      // This marks the start of the authenticated game protocol stream.
+      // Entity data (monsters, boss) arrives BEFORE this signature, so we
+      // must NOT clear monsters here — just skip the 6 signature bytes.
       if (packetSize == 0x00633353) {
-        debugPrint("[BM] *** SERVER SIGNATURE detected — new session! Clearing monsters. ***");
+        debugPrint("[BM] *** SERVER SIGNATURE detected ***");
         if (bytes.length >= 6) {
           final remaining = bytes.sublist(6);
           _buffer.clear();
           _buffer.add(remaining);
-          _storage.clearMonsters();
           continue;
         } else {
           break; // Wait for more data
         }
-      }
-
-      // Detect game handshake: packetSize == 6 and next 2 bytes == 00 04
-      // This comes BEFORE the server signature when a new session starts.
-      // Clear the buffer to discard stale data from the previous session.
-      if (packetSize == 6 && bytes.length >= 6 && bytes[4] == 0x00 && bytes[5] == 0x04) {
-        debugPrint("[BM] *** GAME HANDSHAKE detected — resetting buffer for new session ***");
-        final remaining = bytes.sublist(6);
-        _buffer.clear();
-        _buffer.add(remaining);
-        continue;
       }
 
       if (packetSize < 4 || packetSize > 10000000) {

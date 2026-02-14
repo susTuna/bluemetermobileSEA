@@ -27,10 +27,13 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
     // Use UUID-based entity type detection (like zdps does)
     final entityType = EntityUtils.getEntityType(targetUuidRaw);
     final isTargetPlayer = entityType == EEntityTypeId.char;
-    // For monsters: only process if already known (from SyncNearEntities).
-    // Don't auto-create — deltas lack name/level/templateId, causing "Monster (?)" display.
-    final isTargetMonster = entityType == EEntityTypeId.monster 
-        && _storage.monsterInfoDatas.containsKey(targetUuid);
+    // For monsters: auto-create if not yet known — SyncNearEntities may have
+    // filtered them out initially. DeltaInfo provides HP/position updates that
+    // confirm the entity is a real, active monster.
+    final isTargetMonster = entityType == EEntityTypeId.monster;
+    if (isTargetMonster && !_storage.monsterInfoDatas.containsKey(targetUuid)) {
+      _storage.ensureMonster(targetUuid, forceRespawn: true);
+    }
 
     // Auto-create only for players (player data arrives incrementally via deltas)
     if (isTargetPlayer) {

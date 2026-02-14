@@ -20,9 +20,14 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
     try {
       final syncNearEntities = SyncNearEntities.fromBuffer(payload);
       
+      final totalAppear = syncNearEntities.appear.length;
+      final totalDisappear = syncNearEntities.disappear.length;
+
       if (syncNearEntities.appear.isNotEmpty) {
         for (var entity in syncNearEntities.appear) {
-          if (entity.entType != EEntityType.entChar && entity.entType != EEntityType.entMonster) continue;
+          if (entity.entType != EEntityType.entChar && entity.entType != EEntityType.entMonster) {
+            continue;
+          }
 
           final uid = EntityUtils.getEntityUid(entity.uuid);
           if (uid == Int64.ZERO) continue;
@@ -48,17 +53,20 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
            if (entityType == EEntityTypeId.char) {
               _storage.removePlayer(uid);
            } else if (entityType == EEntityTypeId.monster) {
-              // TransferPassLineLeave indicates line change — already handled by onSceneUpdate
               _storage.removeMonster(uid);
            }
         }
       }
     } catch (e) {
-      debugPrint("Error processing SyncNearEntities: $e");
+      debugPrint("[BM] Error processing SyncNearEntities: $e");
     }
   }
 
   void _processMonsterAttrs(Int64 uid, List<Attr> attrs) {
+    // Log all attr IDs for debug
+    final attrIds = attrs.map((a) => a.id).toList();
+    debugPrint("[BM] _processMonsterAttrs uid=$uid attrCount=${attrs.length} ids=$attrIds");
+    
     // Temporary storage to validate entity before creation
     Map<String, double>? pos;
     Map<String, double>? rot;
@@ -122,29 +130,23 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
       }
     }
 
-    // Filter: Only add if it looks like a real monster
-    // Should have Position AND (MaxHP > 0 OR Level > 0 OR Name != null)
-    // Objects/Gatherables often lack Battle Stats.
-    if ((maxHp != null && maxHp > Int64.ZERO) || 
-        (level != null && level > 0) || 
-        (name != null && name.isNotEmpty)) {
-       
-       // CRITICAL: Do NOT respawn if HP is explicitly 0 (Dead body lingering)
-       if (hp != null && hp <= Int64.ZERO) {
-          _storage.removeMonster(uid);
-          return;
-       }
-
-       _storage.ensureMonster(uid, forceRespawn: true);
-       
-       if (pos != null) _storage.setMonsterPosition(uid, pos);
-       if (rot != null) _storage.setMonsterRotation(uid, rot);
-       if (name != null) _storage.setMonsterName(uid, name);
-       if (level != null) _storage.setMonsterLevel(uid, level);
-       if (hp != null) _storage.setMonsterHp(uid, hp);
-       if (maxHp != null) _storage.setMonsterMaxHp(uid, maxHp);
-       if (templateId != null) _storage.setMonsterTemplateId(uid, templateId);
+    // CRITICAL: Do NOT respawn if HP is explicitly 0 (Dead body lingering)
+    if (hp != null && hp <= Int64.ZERO) {
+       _storage.removeMonster(uid);
+       return;
     }
+
+    // Create ALL monsters at appear — DeltaInfo (0x2D) will fill missing stats.
+    // NearbyView filters display-side for monsters without useful info.
+    _storage.ensureMonster(uid, forceRespawn: true);
+    
+    if (pos != null) _storage.setMonsterPosition(uid, pos);
+    if (rot != null) _storage.setMonsterRotation(uid, rot);
+    if (name != null) _storage.setMonsterName(uid, name);
+    if (level != null) _storage.setMonsterLevel(uid, level);
+    if (hp != null) _storage.setMonsterHp(uid, hp);
+    if (maxHp != null) _storage.setMonsterMaxHp(uid, maxHp);
+    if (templateId != null) _storage.setMonsterTemplateId(uid, templateId);
   }
 
   void _processPlayerAttrs(Int64 playerUid, List<Attr> attrs) {

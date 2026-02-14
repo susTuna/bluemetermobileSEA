@@ -44,23 +44,19 @@ class NearbyView extends StatelessWidget {
 
         final monsters = storage.monsterInfoDatas.values.toList();
 
-        // Debug logging for NearbyView
-        if (monsters.isNotEmpty) {
-          //  debugPrint("[NearbyView] Rebuild with ${monsters.length} monsters.");
-           for (var m in monsters) {
-               if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) {
-                  // debugPrint(" -> [DEAD-KEPT-ALIVE?] Monster ${m.uid}: HP=${m.hp}, isDead=${m.isDead}, Name=${m.name}");
-               }
-           }
-        }
-        
         // Calculate distances and sort
         final List<Map<String, dynamic>> sortedMonsters = [];
         for (var m in monsters) {
             // Filter dead monsters
             if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) continue;
 
-            // Units are typically centimeters in UE games.
+            // Skip monsters without any useful combat info (gatherables, objects)
+            // A real monster should eventually have at least HP, level, or a name
+            final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
+            final hasLevel = m.level != null && m.level! > 0;
+            final hasName = m.name != null && m.name!.isNotEmpty;
+            if (!hasHp && !hasLevel && !hasName) continue;
+
             final rawDist = _calculateDistance(myPos, m.position);
             sortedMonsters.add({'monster': m, 'dist': rawDist});
         }

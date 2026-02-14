@@ -98,6 +98,18 @@ class PacketCaptureService : VpnService() {
         }, 50, 50, TimeUnit.MILLISECONDS)
 
         tcpProxy = TcpProxy(this, ::obtainBuffer) { source, data ->
+            // ── 0) Handle session close notifications from TcpProxy ──
+            if (source.startsWith("CLOSE:")) {
+                val closedSession = source.removePrefix("CLOSE:")
+                if (closedSession == activeGameSession) {
+                    activeGameSession = null
+                    Log.i("BlueMeter", "Active game session closed: $closedSession")
+                }
+                gameSessionCandidates.remove(closedSession)
+                validGameSessions.remove(closedSession)
+                return@TcpProxy
+            }
+
             // Skip upstream (client→server) data and HTTPS
             if (source.startsWith("UP:")) return@TcpProxy
             if (source.contains("destPort=443")) return@TcpProxy
@@ -124,19 +136,27 @@ class PacketCaptureService : VpnService() {
                 return@TcpProxy
             }
 
-            // ── 3) Game session candidate: forward to dataBuffer, check for server signature ──
+            // ── 3) Game session candidate ──
             if (gameSessionCandidates.contains(source)) {
-                if (!validGameSessions.contains(source) && indexOf(data, serverSignature) != -1) {
-                    // Server signature found — this session is now the active game session
+                // Check for server signature → promote to active
+                if (indexOf(data, serverSignature) != -1) {
                     validGameSessions.add(source)
                     activeGameSession = source
                     gameSessionCandidates.remove(source)
+                    // Always write the activation chunk
+                    synchronized(bufferLock) {
+                        dataBuffer.write(data)
+                    }
                     Log.i("BlueMeter", "Game session detected: $source (now active)")
+                    return@TcpProxy
                 }
-                // Forward data regardless — PacketAnalyzerV2 in Dart handles parsing
-                synchronized(bufferLock) {
-                    dataBuffer.write(data)
-                    if (dataBuffer.size() > 200 * 1024) flushData()
+                // Forward candidate data ONLY if there’s no active session
+                // (i.e. during login or after line-change when old session closed)
+                if (activeGameSession == null) {
+                    synchronized(bufferLock) {
+                        dataBuffer.write(data)
+                        if (dataBuffer.size() > 200 * 1024) flushData()
+                    }
                 }
                 return@TcpProxy
             }
@@ -150,16 +170,18 @@ class PacketCaptureService : VpnService() {
                 data[2] == gameHandshake[2] && data[3] == gameHandshake[3] &&
                 data[4] == gameHandshake[4] && data[5] == gameHandshake[5]) {
                 gameSessionCandidates.add(source)
-                // Reset dataBuffer — new session means old data is stale
-                synchronized(bufferLock) {
-                    dataBuffer.reset()
-                    dataBuffer.write(data)
+                // Only reset dataBuffer if there’s no active session
+                if (activeGameSession == null) {
+                    synchronized(bufferLock) {
+                        dataBuffer.reset()
+                        dataBuffer.write(data)
+                    }
                 }
-                Log.i("BlueMeter", "Game session candidate: $source")
+                Log.i("BlueMeter", "Game session candidate: $source (hasActive=${activeGameSession != null})")
                 return@TcpProxy
             }
 
-            // ── 6) Unknown session → ignore ──
+            // ── 6) Unknown session → ignore (TcpProxy still forwards it to the game) ──
         }
 
         val builder = Builder()
