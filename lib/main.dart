@@ -454,9 +454,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                       // Tab 1: Nearby (Radar)
                       _buildSideTab(1, Icons.radar),
                       // Tab 2: Tools (Module/Optimizer)
-                      _buildSideTab(2, Icons.build),
+                      // _buildSideTab(2, Icons.build),
                       // Tab 3: Hunt (Boss/Creature Tracker)
-                      _buildSideTab(3, Icons.track_changes),
+                      _buildSideTab(3, Icons.hub_outlined),
                     ],
                   ),
                 ),
