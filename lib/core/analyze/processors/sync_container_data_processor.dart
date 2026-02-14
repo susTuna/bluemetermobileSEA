@@ -1,5 +1,5 @@
+import 'dart:typed_data';
 import 'package:fixnum/fixnum.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../protocol/blue_protocol.dart';
 import '../../services/logger_service.dart';
@@ -27,11 +27,6 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       }
 
       final vData = syncContainerData.vData;
-
-      debugPrint("[BM] SyncContainerData — charId=${vData.charId}, "
-          "hasCharBase=${vData.hasCharBase()}, hasSceneData=${vData.hasSceneData()}, "
-          "hasAttr=${vData.hasAttr()}, hasRoleLevel=${vData.hasRoleLevel()}, "
-          "hasProfessionList=${vData.hasProfessionList()}");
 
       if (vData.charId == Int64.ZERO) {
         _logger.log("SyncContainerData: charId is 0, ignoring");
@@ -71,9 +66,6 @@ class SyncContainerDataProcessor implements IMessageProcessor {
       // Since we only set currentPlayerUuid from full player data, this check is reliable.
       if (vData.hasSceneData() && isFullPlayerData) {
         final scene = vData.sceneData;
-        debugPrint("[BM] SyncContainerData SceneData — mapId=${scene.mapId}, "
-            "channelId=${scene.channelId}, planeId=${scene.planeId}, lineId=${scene.lineId}, "
-            "hasLineId=${scene.hasLineId()}, hasMapId=${scene.hasMapId()}");
         _storage.onSceneUpdate(
           lineId: scene.lineId > 0 ? scene.lineId : null,
           mapId: scene.mapId > 0 ? scene.mapId : null,

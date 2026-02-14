@@ -27,12 +27,10 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
     // Use UUID-based entity type detection (like zdps does)
     final entityType = EntityUtils.getEntityType(targetUuidRaw);
     final isTargetPlayer = entityType == EEntityTypeId.char;
-    // For monsters: auto-create if not yet known — SyncNearEntities may have
-    // filtered them out initially. DeltaInfo provides HP/position updates that
-    // confirm the entity is a real, active monster.
     final isTargetMonster = entityType == EEntityTypeId.monster;
     if (isTargetMonster && !_storage.monsterInfoDatas.containsKey(targetUuid)) {
-      _storage.ensureMonster(targetUuid, forceRespawn: true);
+      final isSummon = EntityUtils.isSummon(targetUuidRaw);
+      _storage.ensureMonster(targetUuid, forceRespawn: true, isSummon: isSummon);
     }
 
     // Auto-create only for players (player data arrives incrementally via deltas)
@@ -96,6 +94,12 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
               case AttrType.attrLevel:
                 if (isTargetPlayer) _storage.setPlayerLevel(targetUuid, reader.readInt32());
                 break;
+              case AttrType.attrCri:
+                if (isTargetPlayer) _storage.setPlayerCritical(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrLucky:
+                if (isTargetPlayer) _storage.setPlayerLucky(targetUuid, reader.readInt32());
+                break;
               case AttrType.attrHp:
                 hpUpdated = true;
                 final hpParsed = AttrParser.parse(11310, attr.rawData);
@@ -143,34 +147,20 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
           final skillId = d.ownerId;
           if (skillId == 0) continue;
 
-          // Check if target is dead (monster killed)
-          if (d.isDead && isTargetMonster) {
-            _storage.setMonsterIsDead(targetUuid, true);
-            _storage.removeMonster(targetUuid);
-          }
-
           final attackerRaw = d.topSummonerId != Int64.ZERO ? d.topSummonerId : d.attackerUuid;
           if (attackerRaw == Int64.ZERO) continue;
 
           final attackerUuid = EntityUtils.getEntityUid(attackerRaw);
           final attackerEntityType = EntityUtils.getEntityType(attackerRaw);
           bool isAttackerPlayer = attackerEntityType == EEntityTypeId.char;
-
-          // Only record if attacker or target is a player (or both)
-          // Actually, usually we care if attacker is player (DPS) or target is player (Damage Taken)
-          // But for DPS meter, we mostly care about players dealing damage.
-          
-          // Logic from C# (implied):
-          // if (isAttackerPlayer) -> Add Damage Dealt
-          // if (isTargetPlayer) -> Add Damage Taken
-          
-          // Also handle Healing.
           
           Int64 damageValue = Int64.ZERO;
+          bool isLucky = false;
           if (d.hasValue()) {
             damageValue = d.value;
           } else if (d.hasLuckyValue()) {
             damageValue = d.luckyValue;
+            isLucky = true;
           }
 
           // Check if target is dead (monster killed)
@@ -181,35 +171,7 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
 
           if (damageValue == Int64.ZERO) continue;
 
-          // Filter out entities that are not players for the DPS list
-          // If attacker is not a player, we don't want to show them in the DPS list usually.
-          // Unless it's a pet/summon?
-          // d.ownerId might link to the summoner.
-          
-          // If attacker is NOT a player, check if it's a summon (topSummonerId).
-          // If topSummonerId is set, use that as the attacker.
-          
-          // The logic above already does:
-          // final attackerRaw = d.topSummonerId != Int64.ZERO ? d.topSummonerId : d.attackerUuid;
-          // final isAttackerPlayer = _isUuidPlayerRaw(attackerRaw);
-          
-          // So if it's a summon, attackerRaw becomes the player's UUID.
-          // And isAttackerPlayer becomes true.
-          
-          // If isAttackerPlayer is false, it means it's a mob/NPC attacking.
-          // We only want to record this if the target is a player (Damage Taken).
-          
-          // Ghost entry issue:
-          // If we have an entry with 0 DPS, it might be created but never updated with damage?
-          // Or maybe `ensurePlayer` is called somewhere else?
-          
-          // `_processAoiSyncDelta` calls `_storage.ensurePlayer(targetUuid)` if attrs are present.
-          // This is correct, we want to know about players around us.
-          
-          // But `addDamage` creates `DpsData`.
-          
           if (d.type == EDamageType.heal) {
-             // Handle Healing
              if (isAttackerPlayer) {
                _storage.addHealing(
                  attackerUuid, 
@@ -220,10 +182,7 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                );
              }
           } else {
-             // Handle Damage
              if (d.type == EDamageType.normal || d.type == EDamageType.miss) {
-                // Speculatively update Monster HP locally if target is a monster
-                // AND if HP wasn't already updated by an attribute in this packet
                 if (isTargetMonster && !hpUpdated) {
                   _storage.decreaseMonsterHp(targetUuid, damageValue);
                 }
@@ -235,6 +194,7 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                     damageValue, 
                     DateTime.now().millisecondsSinceEpoch,
                     skillId: d.ownerId.toString(),
+                    isLucky: isLucky,
                   );
                 }
              }
@@ -263,25 +223,17 @@ class SyncToMeDeltaInfoProcessor extends BaseDeltaInfoProcessor {
         if (playerUid != Int64.ZERO && _storage.currentPlayerUuid != playerUid) {
           _storage.currentPlayerUuid = playerUid;
           _storage.ensurePlayer(playerUid);
-          _logger.log("SyncToMeDeltaInfo - Set currentPlayerUuid to: $playerUid (from raw: $uuidRaw)");
-          // NOTE: We do NOT clearMonsters here — UUID may vary between packets/sessions.
-          // Real scene changes (line/map) are handled by onSceneUpdate via SyncContainerData.
         }
 
-        // Position jump detection — log only, do NOT clear monsters.
-        // Monster clearing is handled by onSceneUpdate (line/map/dungeon changes).
-        // Clearing here races with SyncNearEntities and kills dungeon boss data.
+        // Position jump detection (log only)
         if (deltaInfo.hasBaseDelta() && deltaInfo.baseDelta.hasAttrs()) {
            for (var attr in deltaInfo.baseDelta.attrs.attrs) {
-             if (attr.id == 52) { // AttrPos
+             if (attr.id == 52) {
                final val = AttrParser.parse(52, attr.rawData);
                if (val is Map<String, double>) {
                  final oldPos = _storage.playerInfoDatas[playerUid]?.position;
-                 if (oldPos != null) {
-                   final dist = _calculateDist(oldPos, val);
-                   if (dist > 250000) { // 500 squared
-                     debugPrint("[BM] Big position jump ($dist) — ${_storage.monsterInfoDatas.length} monsters (no clear).");
-                   }
+                 if (oldPos != null && _calculateDist(oldPos, val) > 250000) {
+                     _logger.log("Big position jump — ${_storage.monsterInfoDatas.length} monsters");
                  }
                }
              }

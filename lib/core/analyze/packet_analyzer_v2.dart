@@ -1,7 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
-
 import '../services/logger_service.dart';
 import '../state/data_storage.dart';
 import 'message_analyzer_v2.dart';
@@ -10,12 +8,10 @@ class PacketAnalyzerV2 {
   final BytesBuilder _buffer = BytesBuilder();
   final MessageAnalyzerV2 _messageAnalyzer;
   final LoggerService _logger = LoggerService();
-  final DataStorage _storage;
   final String tag;
 
   PacketAnalyzerV2(DataStorage storage, {this.tag = 'game'}) 
-      : _storage = storage,
-        _messageAnalyzer = MessageAnalyzerV2(storage, tag: tag);
+      : _messageAnalyzer = MessageAnalyzerV2(storage, tag: tag);
 
   void processPacket(Uint8List chunk) {
     // Detect reset marker (0xFFFFFFFF) sent by Kotlin when port 5003 session changes.
@@ -23,7 +19,6 @@ class PacketAnalyzerV2 {
     if (chunk.length >= 4) {
       final marker = ByteData.sublistView(chunk, 0, 4).getUint32(0, Endian.big);
       if (marker == 0xFFFFFFFF) {
-        debugPrint("[BM] Port5003 session reset marker — clearing reassembly buffer");
         _buffer.clear();
         if (chunk.length > 4) {
           _buffer.add(chunk.sublist(4));
@@ -55,7 +50,6 @@ class PacketAnalyzerV2 {
       // Entity data (monsters, boss) arrives BEFORE this signature, so we
       // must NOT clear monsters here — just skip the 6 signature bytes.
       if (packetSize == 0x00633353) {
-        debugPrint("[BM] *** SERVER SIGNATURE detected ***");
         if (bytes.length >= 6) {
           final remaining = bytes.sublist(6);
           _buffer.clear();
@@ -75,10 +69,7 @@ class PacketAnalyzerV2 {
 
       if (bytes.length < packetSize) {
         // Log when waiting for data (only for non-tiny waits)
-        if (packetSize > 1000 && tag == 'port5003') {
-          debugPrint("[BM][$tag] Waiting for more data: have ${bytes.length}, need $packetSize");
-        }
-        break; // Wait for more data
+          break; // Wait for more data
       }
 
       final packetBody = bytes.sublist(4, packetSize);

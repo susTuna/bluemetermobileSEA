@@ -5,6 +5,8 @@ import '../core/models/player_info.dart';
 import '../core/models/dps_data.dart';
 import '../core/data/skill_names.dart';
 import '../core/services/translation_service.dart';
+import '../core/services/monster_name_service.dart';
+import '../core/state/data_storage.dart';
 import 'player_dps_chart.dart';
 
 class PlayerDetailCard extends StatefulWidget {
@@ -41,6 +43,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
   bool _showDps = true;
   bool _showHps = true;
   bool _showTaken = true;
+  Int64? _selectedTargetUid;
 
   @override
   Widget build(BuildContext context) {
@@ -50,12 +53,18 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
       name = TranslationService().translate('Me');
     }
 
+    // Compute filtered data based on selected target
+    final filteredSkills = _getFilteredSkills();
+    final filteredDamage = _getFilteredDamage();
+    final filteredHeal = _getFilteredHeal();
+    final filteredHitCount = _getFilteredHitCount();
+    final filteredLuckyHits = _getFilteredLuckyHits();
+
     return Material(
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(0),
           border: Border.all(color: Colors.white10),
           boxShadow: [
             BoxShadow(
@@ -68,31 +77,27 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             _buildHeader(name, cls),
-            
             const Divider(height: 1, color: Colors.white10),
-
-            // Player Stats (Level, CP, etc.)
-            if (widget.playerInfo != null) _buildPlayerStats(widget.playerInfo!),
-
-            // Main Content Split
+            if (widget.playerInfo != null) _buildPlayerStats(widget.playerInfo!, filteredHitCount, filteredLuckyHits),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Left Side: Stats & Chart
+                  // Left: Stats + Chart
                   Expanded(
                     flex: 5,
                     child: Column(
                       children: [
-                        _buildCombatStats(),
+                        _buildCombatStats(filteredDamage, filteredHeal),
+                        if (widget.dpsData.targets.isNotEmpty)
+                          _buildTargetFilter(),
                         if (widget.dpsData.timeline.isNotEmpty)
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
                               child: PlayerDpsChart(
-                                dpsData: widget.dpsData, 
+                                dpsData: widget.dpsData,
                                 height: double.infinity,
                                 showDps: _showDps,
                                 showHps: _showHps,
@@ -103,10 +108,8 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                       ],
                     ),
                   ),
-
                   const VerticalDivider(width: 1, color: Colors.white10),
-
-                  // Right Side: Skills
+                  // Right: Skills
                   Expanded(
                     flex: 4,
                     child: Column(
@@ -118,28 +121,16 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
                             children: [
                               Text(
                                 TranslationService().translate('Skills'),
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
+                                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                               ),
                               Text(
                                 TranslationService().translate('Details'),
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
+                                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                               ),
                             ],
                           ),
                         ),
-                        Expanded(
-                          child: _buildSkillsList(),
-                        ),
+                        Expanded(child: _buildSkillsList(filteredSkills)),
                       ],
                     ),
                   ),
@@ -150,6 +141,49 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
         ),
       ),
     );
+  }
+
+  // --- Data helpers ---
+
+  Map<String, SkillData> _getFilteredSkills() {
+    if (_selectedTargetUid == null) return widget.dpsData.skills;
+    return widget.dpsData.targets[_selectedTargetUid]?.skills ?? {};
+  }
+
+  Int64 _getFilteredDamage() {
+    if (_selectedTargetUid == null) return widget.dpsData.totalAttackDamage;
+    return widget.dpsData.targets[_selectedTargetUid]?.totalDamage ?? Int64.ZERO;
+  }
+
+  Int64 _getFilteredHeal() {
+    if (_selectedTargetUid == null) return widget.dpsData.totalHeal;
+    return widget.dpsData.targets[_selectedTargetUid]?.totalHeal ?? Int64.ZERO;
+  }
+
+  int _getFilteredHitCount() {
+    if (_selectedTargetUid == null) return widget.dpsData.totalHitCount;
+    return widget.dpsData.targets[_selectedTargetUid]?.hitCount ?? 0;
+  }
+
+  int _getFilteredLuckyHits() {
+    if (_selectedTargetUid == null) return widget.dpsData.luckyHitCount;
+    return widget.dpsData.targets[_selectedTargetUid]?.luckyHitCount ?? 0;
+  }
+
+  String _getTargetName(Int64 uid) {
+    final monster = DataStorage().monsterInfoDatas[uid];
+    if (monster != null && monster.name != null && monster.name!.isNotEmpty) {
+      return monster.name!;
+    }
+    if (monster != null && monster.templateId != null) {
+      final n = MonsterNameService().getName(monster.templateId!);
+      if (n != null) return n;
+    }
+    final player = DataStorage().playerInfoDatas[uid];
+    if (player != null && player.name != null && player.name!.isNotEmpty) {
+      return player.name!;
+    }
+    return "#${uid.toInt()}";
   }
 
   Widget _buildHeader(String name, Classes cls) {
@@ -229,7 +263,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     );
   }
 
-  Widget _buildPlayerStats(PlayerInfo info) {
+  Widget _buildPlayerStats(PlayerInfo info, int hitCount, int luckyHits) {
     final stats = <Widget>[];
     
     if (info.level != null && info.level! > 0) {
@@ -243,6 +277,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     }
     if (info.lucky != null && info.lucky! > 0) {
       stats.add(_buildStatBadge("${TranslationService().translate('Luck')}: ${info.lucky}", Colors.greenAccent));
+    }
+    if (hitCount > 0) {
+      final luckyRate = luckyHits / hitCount * 100;
+      stats.add(_buildStatBadge("Lucky: ${luckyRate.toStringAsFixed(1)}%", Colors.amber.shade300));
     }
 
     if (stats.isEmpty) return const SizedBox.shrink();
@@ -277,31 +315,36 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     );
   }
 
-  Widget _buildCombatStats() {
+  Widget _buildCombatStats(Int64 filteredDamage, Int64 filteredHeal) {
+    double seconds = widget.dpsData.activeCombatTicks / 1000.0;
+    if (seconds < 1.0) seconds = 1.0;
+    final filteredDps = filteredDamage.toDouble() / seconds;
+    final filteredHps = filteredHeal.toDouble() / seconds;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         children: [
           Expanded(child: _buildStatBox(
             label: "DPS",
-            value: widget.dpsValue,
-            total: widget.dpsData.totalAttackDamage.toInt(),
+            value: _selectedTargetUid != null ? filteredDps : widget.dpsValue,
+            total: filteredDamage.toInt(),
             color: Colors.redAccent,
             icon: Icons.bolt,
             isActive: _showDps,
             onTap: () => setState(() => _showDps = !_showDps),
           )),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(child: _buildStatBox(
             label: "HPS",
-            value: widget.hpsValue,
-            total: widget.dpsData.totalHeal.toInt(),
+            value: _selectedTargetUid != null ? filteredHps : widget.hpsValue,
+            total: filteredHeal.toInt(),
             color: Colors.greenAccent,
             icon: Icons.favorite,
             isActive: _showHps,
             onTap: () => setState(() => _showHps = !_showHps),
           )),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(child: _buildStatBox(
             label: TranslationService().translate('Received'),
             value: widget.takenDpsValue,
@@ -312,6 +355,75 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
             onTap: () => setState(() => _showTaken = !_showTaken),
           )),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTargetFilter() {
+    final targetEntries = widget.dpsData.targets.entries.toList()
+      ..sort((a, b) => b.value.totalDamage.compareTo(a.value.totalDamage));
+    if (targetEntries.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildTargetChip(
+            label: TranslationService().translate('All'),
+            isSelected: _selectedTargetUid == null,
+            onTap: () => setState(() => _selectedTargetUid = null),
+          ),
+          const SizedBox(width: 4),
+          ...targetEntries.take(8).map((e) {
+            final name = _getTargetName(e.key);
+            final short = name.length > 10 ? '${name.substring(0, 10)}…' : name;
+            return Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _buildTargetChip(
+                label: short,
+                isSelected: _selectedTargetUid == e.key,
+                onTap: () => setState(() => _selectedTargetUid = e.key),
+                damage: e.value.totalDamage,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTargetChip({
+    required String label, required bool isSelected,
+    required VoidCallback onTap, Int64? damage,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? Colors.blueAccent.withValues(alpha: 0.6) : Colors.white12,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+              style: TextStyle(
+                color: isSelected ? Colors.blueAccent : Colors.white54,
+                fontSize: 9, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              )),
+            if (damage != null && damage > Int64.ZERO) ...[
+              const SizedBox(width: 3),
+              Text(_formatNumber(damage.toInt()),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 8)),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -380,8 +492,8 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     );
   }
 
-  Widget _buildSkillsList() {
-    if (widget.dpsData.skills.isEmpty) {
+  Widget _buildSkillsList(Map<String, SkillData> skills) {
+    if (skills.isEmpty) {
       return Center(
         child: Text(
           TranslationService().translate('NoSkillData'),
@@ -391,28 +503,29 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
     }
 
     // Aggregate skills by name
-    final Map<String, SkillData> aggregatedSkills = {};
+    final Map<String, _AggregatedSkill> aggregatedSkills = {};
     
-    for (var skill in widget.dpsData.skills.values) {
+    for (var skill in skills.values) {
       final name = getSkillName(int.tryParse(skill.skillId) ?? 0);
       
-      // Filter values based on visibility
       final damage = _showDps ? skill.totalDamage : Int64.ZERO;
       final heal = _showHps ? skill.totalHeal : Int64.ZERO;
       
-      if (damage == 0 && heal == 0) continue;
+      if (damage == Int64.ZERO && heal == Int64.ZERO) continue;
 
       if (aggregatedSkills.containsKey(name)) {
         final existing = aggregatedSkills[name]!;
         existing.totalDamage += damage;
         existing.totalHeal += heal;
         existing.hitCount += skill.hitCount;
+        existing.luckyHitCount += skill.luckyHitCount;
       } else {
-        // Create a copy to avoid modifying original data
-        aggregatedSkills[name] = SkillData(skillId: skill.skillId)
-          ..totalDamage = damage
-          ..totalHeal = heal
-          ..hitCount = skill.hitCount;
+        aggregatedSkills[name] = _AggregatedSkill(
+          totalDamage: damage,
+          totalHeal: heal,
+          hitCount: skill.hitCount,
+          luckyHitCount: skill.luckyHitCount,
+        );
       }
     }
 
@@ -451,6 +564,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
         final isHeal = skill.totalHeal > skill.totalDamage;
         final color = isHeal ? Colors.greenAccent : Colors.redAccent;
         final avg = skill.hitCount > 0 ? skillTotal / skill.hitCount : 0;
+        final luckyPct = skill.hitCount > 0 ? (skill.luckyHitCount / skill.hitCount * 100) : 0.0;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 2),
@@ -469,52 +583,31 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
               ),
               // Content
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Row(
                   children: [
-                    // Skill Name
                     Expanded(
                       child: Text(
                         name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // Stats
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              _formatNumber(skillTotal),
-                              style: TextStyle(
-                                color: color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "(${percentage.toStringAsFixed(1)}%)",
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
+                        Row(children: [
+                          Text(_formatNumber(skillTotal),
+                            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 3),
+                          Text("(${percentage.toStringAsFixed(1)}%)",
+                            style: const TextStyle(color: Colors.white54, fontSize: 9)),
+                        ]),
                         Text(
-                          "${skill.hitCount} ${TranslationService().translate('Hits')} • ${TranslationService().translate('Avg')}: ${_formatNumber(avg)}",
-                          style: const TextStyle(
-                            color: Colors.white38,
-                            fontSize: 9,
-                          ),
+                          "${skill.hitCount} ${TranslationService().translate('Hits')} • ${TranslationService().translate('Avg')}: ${_formatNumber(avg)}"
+                          "${luckyPct > 0 ? ' • L:${luckyPct.toStringAsFixed(0)}%' : ''}",
+                          style: const TextStyle(color: Colors.white38, fontSize: 8),
                         ),
                       ],
                     ),
@@ -530,36 +623,42 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> {
 
   Color _getClassColor(Classes cls) {
     switch (cls.role) {
-      case Role.tank:
-        return Colors.blueAccent;
-      case Role.heal:
-        return Colors.greenAccent;
-      case Role.dps:
-        return Colors.redAccent;
-      default:
-        return Colors.grey;
+      case Role.tank: return Colors.blueAccent;
+      case Role.heal: return Colors.greenAccent;
+      case Role.dps: return Colors.redAccent;
+      default: return Colors.grey;
     }
   }
 
   String _formatDuration(int milliseconds) {
     final duration = Duration(milliseconds: milliseconds);
     String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return "$twoDigitMinutes:$twoDigitSeconds";
+    return "${twoDigits(duration.inMinutes.remainder(60))}:${twoDigits(duration.inSeconds.remainder(60))}";
   }
 
   String _formatNumber(num number) {
     if (number >= 1000000) {
       double val = number / 1000000;
-      String s = val < 100 ? val.toStringAsFixed(2) : val.toStringAsFixed(1);
-      return "${s}m";
+      return "${val < 100 ? val.toStringAsFixed(2) : val.toStringAsFixed(1)}m";
     }
     if (number >= 1000) {
       double val = number / 1000;
-      String s = val < 100 ? val.toStringAsFixed(2) : val.toStringAsFixed(1);
-      return "${s}k";
+      return "${val < 100 ? val.toStringAsFixed(2) : val.toStringAsFixed(1)}k";
     }
     return number.toStringAsFixed(0);
   }
+}
+
+class _AggregatedSkill {
+  Int64 totalDamage;
+  Int64 totalHeal;
+  int hitCount;
+  int luckyHitCount;
+
+  _AggregatedSkill({
+    required this.totalDamage,
+    required this.totalHeal,
+    required this.hitCount,
+    required this.luckyHitCount,
+  });
 }

@@ -47,23 +47,13 @@ class NearbyView extends StatelessWidget {
         // Shared monster filter: real combat monsters only
         bool isValidMonster(MonsterInfo m) {
           if (m.isDead || (m.hp != null && m.hp! <= Int64.ZERO)) return false;
+          if (m.isSummon) return false;
           final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
           final hasLevel = m.level != null && m.level! > 0;
           if (!hasHp && !hasLevel) return false;
-          // Skip unnamed entities (dungeon props/traps — never receive a name)
           if (m.name == null || m.name!.isEmpty) return false;
-          // Skip resonance entities (fake combat companions)
           if (m.name!.contains('Resonance')) return false;
           return true;
-        }
-
-        // Debug: log all monsters in storage
-        if (monsters.isNotEmpty) {
-          final names = monsters.where(isValidMonster)
-            .map((m) => '${m.name} tid=${m.templateId} lv=${m.level} hp=${m.hp}/${m.maxHp}').toList();
-          if (names.isNotEmpty) {
-            debugPrint("[BM] NearbyView monsters (${names.length}): ${names.join(' | ')}");
-          }
         }
 
         // Calculate distances and sort

@@ -5,8 +5,20 @@ class SkillData {
   Int64 totalDamage = Int64.ZERO;
   Int64 totalHeal = Int64.ZERO;
   int hitCount = 0;
+  int luckyHitCount = 0;
 
   SkillData({required this.skillId});
+}
+
+class TargetBreakdown {
+  final Int64 targetUid;
+  Int64 totalDamage = Int64.ZERO;
+  Int64 totalHeal = Int64.ZERO;
+  int hitCount = 0;
+  int luckyHitCount = 0;
+  final Map<String, SkillData> skills = {};
+
+  TargetBreakdown({required this.targetUid});
 }
 
 class TimeSlice {
@@ -30,28 +42,33 @@ class DpsData {
   
   bool isNpcData = false;
 
+  // Hit tracking for crit/luck rates
+  int totalHitCount = 0;
+  int luckyHitCount = 0;
+
   // Skill tracking
   final Map<String, SkillData> skills = {};
+  
+  // Per-target breakdown
+  final Map<Int64, TargetBreakdown> targets = {};
   
   // Timeline tracking (Key: seconds from start)
   final Map<int, TimeSlice> timeline = {};
 
   DpsData({required this.uid});
 
+  double get luckyRate => totalHitCount > 0 ? luckyHitCount / totalHitCount : 0.0;
+
   double get dps {
     if (activeCombatTicks <= 0) return totalAttackDamage.toDouble();
-    // Ticks are in milliseconds (from DateTime.now().millisecondsSinceEpoch)
     double seconds = activeCombatTicks / 1000.0;
-    // Enforce minimum 1s duration to avoid massive spikes at start of combat
     if (seconds < 1.0) seconds = 1.0;
     return totalAttackDamage.toDouble() / seconds;
   }
   
-  // Simple DPS based on total time (start to end)
   double get simpleDps {
     if (startLoggedTick == null) return 0.0;
     double seconds = (lastLoggedTick - startLoggedTick!) / 1000.0;
-    // Enforce minimum 1s duration to avoid massive spikes at start of combat
     if (seconds < 1.0) seconds = 1.0;
     return totalAttackDamage.toDouble() / seconds;
   }

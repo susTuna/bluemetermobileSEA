@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:zstd/zstd.dart';
 
 import '../protocol/blue_protocol.dart';
@@ -80,7 +79,6 @@ class MessageAnalyzerV2 {
       if (tag == 'port5003') {
         return; // Skip — different service, different format
       }
-      debugPrint("[BM] Notify non-combat svc=0x${serviceUuid.toRadixString(16)} method=0x${methodId.toRadixString(16)} — processing anyway");
     }
 
     Uint8List msgPayload = reader.readBytes(reader.remaining);
@@ -91,13 +89,6 @@ class MessageAnalyzerV2 {
         _logger.error("Zstd decompression failed", error: e);
         return;
       }
-    }
-
-    debugPrint("[BM][$tag] WorldNtf methodId=0x${methodId.toRadixString(16)} (${msgPayload.length} bytes)");
-
-    // Only log 0x15 and 0x16 prominently
-    if (methodId == 0x15) {
-      debugPrint("[BM][$tag] ========== SyncContainerData (0x15) RECEIVED! ${msgPayload.length}B ==========");
     }
 
     final processor = _registry.getProcessor(methodId);
@@ -129,8 +120,6 @@ class MessageAnalyzerV2 {
       if (syncData.hasVData()) {
         final vData = syncData.vData;
         if (vData.hasSceneData() && vData.sceneData.lineId > 0) {
-          debugPrint("[BM] >>>>>> SCENE DATA via SyncContainerData! lineId=${vData.sceneData.lineId}, "
-              "mapId=${vData.sceneData.mapId}, channelId=${vData.sceneData.channelId}");
           _registry.getProcessor(0x15)?.process(protobuf);
           return;
         }
@@ -150,8 +139,6 @@ class MessageAnalyzerV2 {
         final sd = vData.sceneData;
         final sceneBytes = sd.writeToBuffer();
         if (sceneBytes.length < 100 && sd.lineId > 0) {
-          debugPrint("[BM] >>>>>> SCENE DATA via raw VData! lineId=${sd.lineId}, "
-              "mapId=${sd.mapId}, channelId=${sd.channelId}");
           _storage.onSceneUpdate(
             lineId: sd.lineId,
             mapId: sd.mapId > 0 ? sd.mapId : null,
@@ -161,24 +148,13 @@ class MessageAnalyzerV2 {
         }
       }
       if (vData.charId.toInt() > 0 && vData.hasCharBase()) {
-        debugPrint("[BM] Return raw VData: charId=${vData.charId}, hasSceneData=${vData.hasSceneData()}, "
-            "hasCharBase=${vData.hasCharBase()}");
       }
     } catch (_) {}
   }
 
   void _processCallMsg(Uint8List data, bool isCompressed) {
     // Parse Call format: [serviceUuid 8B][callSeqId 4B][stubId 4B][methodId 4B][payload]
-    final reader = ByteReader(data);
-    if (reader.remaining < 20) return;
-
-    final serviceUuid = reader.readUInt64BE();
-    final callSeqId = reader.readUInt32BE();
-    reader.skip(4); // stubId
-    final methodId = reader.readUInt32BE();
-    final payloadLen = reader.remaining;
-
-    debugPrint("[BM][$tag] Call svc=0x${serviceUuid.toRadixString(16)} seq=$callSeqId method=0x${methodId.toRadixString(16)} payload=${payloadLen}B");
+    // No action needed — just consume the packet.
   }
 
   void _processFrameDown(Uint8List data, bool isCompressed) {
@@ -195,7 +171,7 @@ class MessageAnalyzerV2 {
       try {
         innerPayload = Uint8List.fromList(_zstd.decode(innerPayload));
       } catch (e) {
-        debugPrint("[BM] Zstd decompression failed in FrameDown: $e");
+        _logger.error("Zstd decompression failed in FrameDown", error: e);
         return;
       }
     }

@@ -1,6 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:fixnum/fixnum.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../protocol/blue_protocol.dart';
 import '../../services/logger_service.dart';
@@ -27,26 +27,22 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
   void process(Uint8List payload) {
     try {
       if (_storage.currentPlayerUuid == Int64.ZERO) {
-        debugPrint("[BM] DirtyData: skipped — currentPlayerUuid is ZERO");
         return;
       }
 
       final dirty = SyncContainerDirtyData.fromBuffer(payload);
       if (!dirty.hasVData() || !dirty.vData.hasBufferS() || dirty.vData.bufferS.isEmpty) {
-        debugPrint("[BM] DirtyData: skipped — hasVData=${dirty.hasVData()}, hasBufferS=${dirty.hasVData() ? dirty.vData.hasBufferS() : 'N/A'}, bufferLen=${dirty.hasVData() && dirty.vData.hasBufferS() ? dirty.vData.bufferS.length : 0}");
         return;
       }
 
       final buf = Uint8List.fromList(dirty.vData.bufferS);
       final reader = _BlobReader(buf);
-      debugPrint("[BM] DirtyData: bufferS length=${buf.length}, first bytes=${buf.length > 20 ? buf.sublist(0, 20) : buf}");
 
       final playerUid = _storage.currentPlayerUuid;
       _storage.ensurePlayer(playerUid);
 
       // Parse top-level CharSerialize blob using zdps BlobType.Read() format
       _parseBlobFields(reader, (index) {
-        debugPrint("[BM] DirtyData top-level field index=$index");
         switch (index) {
           case 1: // CharId (int32 in blob format)
             reader.readInt(); // consume charId, we already know it
@@ -64,8 +60,7 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
         }
       });
     } catch (e, st) {
-      debugPrint("[BM] ERROR processing SyncContainerDirtyData: $e");
-      debugPrint("[BM] StackTrace: $st");
+      _logger.error("Error processing SyncContainerDirtyData: $e\n$st");
     }
   }
 
@@ -171,7 +166,6 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
       }
     });
 
-    debugPrint("[BM] SyncContainerDirtyData SceneData — mapId=$mapId, channelId=$channelId, lineId=$lineId");
     _storage.onSceneUpdate(lineId: lineId, mapId: mapId, channelId: channelId);
     return ok;
   }

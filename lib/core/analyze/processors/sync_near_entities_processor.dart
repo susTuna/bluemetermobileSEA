@@ -19,9 +19,6 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
   void process(Uint8List payload) {
     try {
       final syncNearEntities = SyncNearEntities.fromBuffer(payload);
-      
-      final totalAppear = syncNearEntities.appear.length;
-      final totalDisappear = syncNearEntities.disappear.length;
 
       if (syncNearEntities.appear.isNotEmpty) {
         for (var entity in syncNearEntities.appear) {
@@ -38,7 +35,8 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
           if (entity.entType == EEntityType.entChar) {
             _processPlayerAttrs(uid, attrCollection.attrs);
           } else if (entity.entType == EEntityType.entMonster) {
-            _processMonsterAttrs(uid, attrCollection.attrs);
+            final isSummon = EntityUtils.isSummon(entity.uuid);
+            _processMonsterAttrs(uid, attrCollection.attrs, isSummon: isSummon);
           }
         }
       }
@@ -62,7 +60,7 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
     }
   }
 
-  void _processMonsterAttrs(Int64 uid, List<Attr> attrs) {
+  void _processMonsterAttrs(Int64 uid, List<Attr> attrs, {bool isSummon = false}) {
     
     // Temporary storage to validate entity before creation
     Map<String, double>? pos;
@@ -134,8 +132,7 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
     }
 
     // Create ALL monsters at appear — DeltaInfo (0x2D) will fill missing stats.
-    // NearbyView filters display-side for monsters without useful info.
-    _storage.ensureMonster(uid, forceRespawn: true);
+    _storage.ensureMonster(uid, forceRespawn: true, isSummon: isSummon);
     
     if (pos != null) _storage.setMonsterPosition(uid, pos);
     if (rot != null) _storage.setMonsterRotation(uid, rot);
@@ -199,6 +196,12 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
             break;
           case AttrType.attrHp:
             _storage.setPlayerHp(playerUid, reader.readInt32());
+            break;
+          case AttrType.attrCri:
+            _storage.setPlayerCritical(playerUid, reader.readInt32());
+            break;
+          case AttrType.attrLucky:
+            _storage.setPlayerLucky(playerUid, reader.readInt32());
             break;
           default:
             break;

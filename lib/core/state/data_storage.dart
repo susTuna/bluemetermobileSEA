@@ -15,6 +15,18 @@ class DataStorage extends ChangeNotifier {
 
   final LoggerService _logger = LoggerService();
 
+  // Batched notification to avoid excessive rebuilds
+  bool _notifyScheduled = false;
+  void _scheduleNotify() {
+    if (!_notifyScheduled) {
+      _notifyScheduled = true;
+      Future.microtask(() {
+        _notifyScheduled = false;
+        notifyListeners();
+      });
+    }
+  }
+
   Int64 _currentPlayerUuid = Int64.ZERO;
   Int64 get currentPlayerUuid => _currentPlayerUuid;
   
@@ -53,29 +65,19 @@ class DataStorage extends ChangeNotifier {
   /// Called when SyncContainerData provides scene info.
   /// Detects line changes and resets transient state accordingly.
   void onSceneUpdate({int? lineId, int? mapId, int? channelId}) {
-    // Only treat as a real change if we already had a valid value (> 0).
-    // Initial setting (from 0 → value) is NOT a change — don't clear entities.
     final bool lineChanged = lineId != null && lineId > 0 && _lineId > 0 && _lineId != lineId;
     final bool mapChanged = mapId != null && mapId > 0 && _mapId > 0 && _mapId != mapId;
-    // Detect dungeon entry: player had a valid lineId but now it's gone (lineId=0/null)
     final bool dungeonEntry = (lineId == null || lineId == 0) && _lineId > 0;
-    final oldLine = _lineId;
-    final oldMap = _mapId;
     
     if (mapId != null && mapId > 0) _mapId = mapId;
     if (channelId != null && channelId > 0) _channelId = channelId;
     if (lineId != null && lineId > 0) _lineId = lineId;
-    if (dungeonEntry) _lineId = 0; // Mark as "in dungeon"
+    if (dungeonEntry) _lineId = 0;
 
     if (lineChanged || mapChanged || dungeonEntry) {
-      debugPrint("[BM] Scene change! Line: $oldLine→${lineId ?? 0}${dungeonEntry ? ' (dungeon)' : ''}, Map: $oldMap→$mapId. Clearing ${_monsterInfoDatas.length} monsters.");
-      _logger.log("Scene change detected! Line: $_lineId, Map: $_mapId, Channel: $_channelId");
-      // Clear all transient entity data
       _monsterInfoDatas.clear();
       _deadMonsters.clear();
-      // Remove all players except self
       _playerInfoDatas.removeWhere((uid, _) => uid != _currentPlayerUuid);
-      // Reset combat
       _fullDpsDatas.clear();
       _combatStartTime = null;
       _lastActionTime = null;
@@ -136,12 +138,9 @@ class DataStorage extends ChangeNotifier {
   Map<Int64, PlayerInfo> get playerInfoDatas => Map.unmodifiable(_playerInfoDatas);
   Map<Int64, MonsterInfo> get monsterInfoDatas => Map.unmodifiable(_monsterInfoDatas);
   
-  // Filter DPS datas to only include entities that are identified as players (exist in playerInfoDatas)
-  // This hides monsters/NPCs from the DPS list.
   Map<Int64, DpsData> get fullDpsDatas {
     final filtered = <Int64, DpsData>{};
     _fullDpsDatas.forEach((key, value) {
-      // Always include current player
       if (key == _currentPlayerUuid) {
         filtered[key] = value;
       } else if (_playerInfoDatas.containsKey(key)) {
@@ -149,14 +148,6 @@ class DataStorage extends ChangeNotifier {
         if (info != null && info.professionId != null && info.professionId != 0) {
           filtered[key] = value;
         }
-      } else {
-        // Also include entities that are not in playerInfoDatas BUT we have established DPS data for them
-        // and they likely were players (or we just keep them until combat reset).
-        // Check if we can determine from DpsData if it was a player?
-        // Actually, if they are removed from playerInfoDatas, we lose their Name/Class info.
-        // So we MUST NOT remove them from playerInfoDatas if we want to show them.
-        
-        // This 'else' block is just a fallback, but the real fix is in removePlayer.
       }
     });
     return Map.unmodifiable(filtered);
@@ -245,26 +236,41 @@ class DataStorage extends ChangeNotifier {
     return _fullDpsDatas[uid];
   }
 
-  void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick, {String? skillId}) {
+  void addDamage(Int64 attackerUid, Int64 targetUid, Int64 damage, int tick, {String? skillId, bool isLucky = false}) {
     _onAction();
-    _logger.log("addDamage - Attacker: $attackerUid, Target: $targetUid, Damage: $damage, CurrentPlayer: $_currentPlayerUuid");
-    // 1. Add Damage Dealt to Attacker
+    
+    // 1. Damage Dealt to Attacker
     var attackerData = getOrCreateDpsData(attackerUid);
     attackerData.startLoggedTick ??= tick;
     attackerData.lastLoggedTick = tick;
     attackerData.totalAttackDamage += damage;
+    attackerData.totalHitCount++;
+    if (isLucky) attackerData.luckyHitCount++;
     if (attackerData.startLoggedTick != null) {
        attackerData.activeCombatTicks = tick - attackerData.startLoggedTick!;
     }
 
-    // Track skill data
+    // Skill tracking
     if (skillId != null && skillId.isNotEmpty) {
       var skill = attackerData.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
       skill.totalDamage += damage;
       skill.hitCount++;
+      if (isLucky) skill.luckyHitCount++;
     }
 
-    // Track timeline data for Attacker (Damage Dealt)
+    // Per-target breakdown
+    var target = attackerData.targets.putIfAbsent(targetUid, () => TargetBreakdown(targetUid: targetUid));
+    target.totalDamage += damage;
+    target.hitCount++;
+    if (isLucky) target.luckyHitCount++;
+    if (skillId != null && skillId.isNotEmpty) {
+      var tSkill = target.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
+      tSkill.totalDamage += damage;
+      tSkill.hitCount++;
+      if (isLucky) tSkill.luckyHitCount++;
+    }
+
+    // Timeline
     if (attackerData.startLoggedTick != null) {
       final relativeTime = (tick - attackerData.startLoggedTick!) ~/ 1000;
       final slice = attackerData.timeline.putIfAbsent(relativeTime, () => TimeSlice());
@@ -274,7 +280,7 @@ class DataStorage extends ChangeNotifier {
       }
     }
 
-    // 2. Add Damage Taken to Target
+    // 2. Damage Taken to Target
     var targetData = getOrCreateDpsData(targetUid);
     targetData.startLoggedTick ??= tick;
     targetData.lastLoggedTick = tick;
@@ -282,21 +288,19 @@ class DataStorage extends ChangeNotifier {
     if (targetData.startLoggedTick != null) {
        targetData.activeCombatTicks = tick - targetData.startLoggedTick!;
     }
-
-    // Track timeline data for Target (Damage Taken)
     if (targetData.startLoggedTick != null) {
       final relativeTime = (tick - targetData.startLoggedTick!) ~/ 1000;
       final slice = targetData.timeline.putIfAbsent(relativeTime, () => TimeSlice());
       slice.taken += damage.toInt();
     }
 
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void addHealing(Int64 healerUid, Int64 targetUid, Int64 healAmount, int tick, {String? skillId}) {
     _onAction();
-    _logger.log("addHealing - Healer: $healerUid, Target: $targetUid, Heal: $healAmount, CurrentPlayer: $_currentPlayerUuid");
-    // 1. Add Heal Output to Healer
+    
+    // 1. Heal Output to Healer
     var healerData = getOrCreateDpsData(healerUid);
     healerData.startLoggedTick ??= tick;
     healerData.lastLoggedTick = tick;
@@ -305,14 +309,23 @@ class DataStorage extends ChangeNotifier {
        healerData.activeCombatTicks = tick - healerData.startLoggedTick!;
     }
 
-    // Track skill data
+    // Skill tracking
     if (skillId != null && skillId.isNotEmpty) {
       var skill = healerData.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
       skill.totalHeal += healAmount;
       skill.hitCount++;
     }
+
+    // Per-target breakdown
+    var target = healerData.targets.putIfAbsent(targetUid, () => TargetBreakdown(targetUid: targetUid));
+    target.totalHeal += healAmount;
+    if (skillId != null && skillId.isNotEmpty) {
+      var tSkill = target.skills.putIfAbsent(skillId, () => SkillData(skillId: skillId));
+      tSkill.totalHeal += healAmount;
+      tSkill.hitCount++;
+    }
     
-    // Track timeline data for Healer (Healing Done)
+    // Timeline
     if (healerData.startLoggedTick != null) {
       final relativeTime = (tick - healerData.startLoggedTick!) ~/ 1000;
       final slice = healerData.timeline.putIfAbsent(relativeTime, () => TimeSlice());
@@ -322,7 +335,7 @@ class DataStorage extends ChangeNotifier {
       }
     }
 
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void reset({bool resetTimer = true}) {
@@ -347,91 +360,90 @@ class DataStorage extends ChangeNotifier {
 
   void setPlayerName(Int64 uid, String name) {
     ensurePlayer(uid);
-    final info = _playerInfoDatas[uid]!;
-    info.name = name;
-    _logger.log("setPlayerName called: UID=$uid, Name=$name");
-    DatabaseService().savePlayer(info);
-    notifyListeners();
+    _playerInfoDatas[uid]!.name = name;
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
   }
 
   void setPlayerProfessionId(Int64 uid, int id) {
     ensurePlayer(uid);
-    final info = _playerInfoDatas[uid]!;
-    info.professionId = id;
-    DatabaseService().savePlayer(info);
-    notifyListeners();
+    _playerInfoDatas[uid]!.professionId = id;
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
   }
 
   void setPlayerCombatPower(Int64 uid, int value) {
     ensurePlayer(uid);
-    final info = _playerInfoDatas[uid]!;
-    info.combatPower = value;
-    DatabaseService().savePlayer(info);
-    notifyListeners();
+    _playerInfoDatas[uid]!.combatPower = value;
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
   }
 
   void setPlayerLevel(Int64 uid, int value) {
     ensurePlayer(uid);
-    final info = _playerInfoDatas[uid]!;
-    info.level = value;
-    DatabaseService().savePlayer(info);
-    notifyListeners();
+    _playerInfoDatas[uid]!.level = value;
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
   }
 
   void setPlayerHp(Int64 uid, int value) {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.hp = Int64(value);
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setPlayerMaxHp(Int64 uid, int value) {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.maxHp = Int64(value);
-    // Don't save maxHP updates constantly unless critical, but often getting maxHP means we got good info?
-    // Let's safe it sparingly or assume other updates will catch it.
-    // Actually MaxHP doesn't change that often.
     DatabaseService().savePlayer(_playerInfoDatas[uid]!);
-    notifyListeners();
+    _scheduleNotify();
+  }
+
+  void setPlayerCritical(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.critical = value;
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
+  }
+
+  void setPlayerLucky(Int64 uid, int value) {
+    ensurePlayer(uid);
+    _playerInfoDatas[uid]!.lucky = value;
+    DatabaseService().savePlayer(_playerInfoDatas[uid]!);
+    _scheduleNotify();
   }
 
   void setPlayerPosition(Int64 uid, Map<String, double> position) {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.position = position;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setPlayerRotation(Int64 uid, Map<String, double> rotation) {
     ensurePlayer(uid);
     _playerInfoDatas[uid]!.rotation = rotation;
-    notifyListeners();
+    _scheduleNotify();
   }
   
   void removePlayer(Int64 uid) {
     if (_playerInfoDatas.containsKey(uid)) {
-      // Don't remove player if they have DPS/Healing stats
-      if (_fullDpsDatas.containsKey(uid)) {
-          // Maybe just mark as offline/away? 
-          // For now, doing nothing keeps them in the list.
-          _logger.log("removePlayer($uid) ignored because player has DPS stats.");
-          return;
-      }
+      if (_fullDpsDatas.containsKey(uid)) return; // Keep players with DPS stats
       _playerInfoDatas.remove(uid);
-      notifyListeners();
+      _scheduleNotify();
     }
   }
 
   // --- Monster Info Setters ---
 
-  bool ensureMonster(Int64 uid, {bool forceRespawn = false}) {
-    if (forceRespawn) {
-      _deadMonsters.remove(uid);
-    }
-    
+  bool ensureMonster(Int64 uid, {bool forceRespawn = false, bool isSummon = false}) {
+    if (forceRespawn) _deadMonsters.remove(uid);
     if (_deadMonsters.contains(uid)) return false;
 
     if (!_monsterInfoDatas.containsKey(uid)) {
-      _monsterInfoDatas[uid] = MonsterInfo(uid: uid);
-      notifyListeners();
+      _monsterInfoDatas[uid] = MonsterInfo(uid: uid, isSummon: isSummon);
+      _scheduleNotify();
+    } else if (isSummon) {
+      _monsterInfoDatas[uid]!.isSummon = true;
     }
     return true;
   }
@@ -439,44 +451,36 @@ class DataStorage extends ChangeNotifier {
   void setMonsterTemplateId(Int64 uid, int id) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.templateId = id;
-    
-    // Auto-resolve name if not present
     if (_monsterInfoDatas[uid]!.name == null || _monsterInfoDatas[uid]!.name!.isEmpty) {
        final name = MonsterNameService().getName(id);
-       if (name != null) {
-          _monsterInfoDatas[uid]!.name = name;
-       }
+       if (name != null) _monsterInfoDatas[uid]!.name = name;
     }
-    
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setMonsterName(Int64 uid, String name) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.name = name;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setMonsterLevel(Int64 uid, int level) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.level = level;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setMonsterIsDead(Int64 uid, bool isDead) {
     if (_monsterInfoDatas.containsKey(uid)) {
        _monsterInfoDatas[uid]!.isDead = isDead;
-       notifyListeners();
+       _scheduleNotify();
     }
   }
 
   void setMonsterHp(Int64 uid, Int64 hp) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.hp = hp;
-    if (hp <= Int64.ZERO) {
-      // Logic handled in UI filtering usually, but we can also cleanup if needed.
-    }
-    notifyListeners();
+    _scheduleNotify();
   }
   
   void decreaseMonsterHp(Int64 uid, Int64 damage) {
@@ -486,7 +490,7 @@ class DataStorage extends ChangeNotifier {
         var newHp = currentHp - damage;
         if (newHp < Int64.ZERO) newHp = Int64.ZERO;
         _monsterInfoDatas[uid]!.hp = newHp;
-        notifyListeners();
+        _scheduleNotify();
       }
     }
   }
@@ -494,27 +498,26 @@ class DataStorage extends ChangeNotifier {
   void setMonsterMaxHp(Int64 uid, Int64 maxHp) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.maxHp = maxHp;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setMonsterPosition(Int64 uid, Map<String, double> position) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.position = position;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void setMonsterRotation(Int64 uid, Map<String, double> rotation) {
     if (!ensureMonster(uid)) return;
     _monsterInfoDatas[uid]!.rotation = rotation;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   void removeMonster(Int64 uid) {
     _deadMonsters.add(uid);
     if (_monsterInfoDatas.containsKey(uid)) {
       _monsterInfoDatas.remove(uid);
-      debugPrint("[DataStorage] Removed monster $uid. Map size: ${_monsterInfoDatas.length}");
-      notifyListeners();
+      _scheduleNotify();
     }
   }
 }

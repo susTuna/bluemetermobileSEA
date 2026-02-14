@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../../protocol/blue_protocol.dart';
 import '../../state/data_storage.dart';
 import 'message_processor.dart';
 

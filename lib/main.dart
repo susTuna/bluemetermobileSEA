@@ -183,7 +183,6 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                  final currentUids = storage.monsterInfoDatas.keys.toList();
                  for (var uid in currentUids) {
                     if (!incomingUids.contains(uid)) {
-                       debugPrint("[Overlay] Removing stale monster $uid");
                        storage.removeMonster(uid);
                     }
                  }
@@ -963,9 +962,8 @@ class _HomePageState extends State<HomePage> {
         final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
         final hasLevel = m.level != null && m.level! > 0;
         if (!hasHp && !hasLevel) return false;
-        // Skip unnamed entities (dungeon props/traps)
+        if (m.isSummon) return false;
         if (m.name == null || m.name!.isEmpty) return false;
-        // Skip resonance entities
         if (m.name!.contains('Resonance')) return false;
         return true;
       })
@@ -1100,10 +1098,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     // Only log non-heartbeat data (heartbeats are 6 bytes)
-    if (data.length > 6) {
-      debugPrint("[BM] Port5003 received: ${data.length} bytes");
-    }
-
     // Feed into a second PacketAnalyzerV2 (port 5003 only now)
     _otherSessionAnalyzer.processPacket(data);
   }
