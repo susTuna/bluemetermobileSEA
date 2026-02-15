@@ -29,6 +29,10 @@ import 'core/services/logger_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);  
   await MonsterNameService().load();
   
   // Pre-load known mobs for HP reporting (non-blocking)
