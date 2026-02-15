@@ -210,10 +210,10 @@ class PacketCaptureService : VpnService() {
             }
 
             // ── 6) Unknown session → log first data for diagnosis ──
-            if (data.size >= 6) {
-                val hex = data.take(12).joinToString(" ") { "%02x".format(it) }
+            // if (data.size >= 6) {
+                // val hex = data.take(12).joinToString(" ") { "%02x".format(it) }
                 // Log.i("BlueMeter", "Unknown session data: $source — first bytes: $hex (${data.size}B)")
-            }
+            // }
         }
 
         val builder = Builder()
