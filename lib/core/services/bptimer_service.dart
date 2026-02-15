@@ -63,7 +63,7 @@ class BPTimerService extends ChangeNotifier {
   /// Get top 3 channels with HP > 0 for a given mob, sorted by HP ascending
   List<MobChannelStatus> getTopChannels(String mobId) {
     final statuses = _channelStatuses[mobId] ?? [];
-    final alive = statuses.where((s) => s.lastHp > 0).toList();
+    final alive = statuses.where((s) => s.lastHp > 0 && s.lastUpdate.isAfter(DateTime.now().subtract(const Duration(minutes: 5)))).toList();
     alive.sort((a, b) => a.lastHp.compareTo(b.lastHp));
     return alive.take(3).toList();
   }
