@@ -1,6 +1,9 @@
 /.crea/
 .DS_Store
 
+# Dart defines (API keys)
+dart_defines.json
+
 # Miscellaneous
 *.class
 *.lock

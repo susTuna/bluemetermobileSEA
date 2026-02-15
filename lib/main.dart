@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/analyze/packet_analyzer_v2.dart';
 import 'core/state/data_storage.dart';
 import 'core/services/monster_name_service.dart';
+import 'core/services/bptimer_service.dart';
 import 'core/models/dps_data.dart';
 import 'core/models/player_info.dart';
 
@@ -28,6 +29,9 @@ import 'core/services/logger_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await MonsterNameService().load();
+  
+  // Pre-load known mobs for HP reporting (non-blocking)
+  BPTimerService().ensureMobsLoaded();
   
   runApp(
     ChangeNotifierProvider(
@@ -883,6 +887,7 @@ class _HomePageState extends State<HomePage> {
   );
 
   final LoggerService _logger = LoggerService();
+  final BPTimerService _bpTimerService = BPTimerService();
 
   bool _isVpnRunning = false;
   StreamSubscription? _packetSubscription;
@@ -892,6 +897,7 @@ class _HomePageState extends State<HomePage> {
   Timer? _overlayUpdateTimer;
   ReceivePort? _receivePort;
   String? _selectedPlayerUid; // UID du joueur sélectionné pour affichage de la carte
+  int _lastReportedLineId = 0; // Track line changes for throttle reset
 
   @override
   void initState() {
@@ -1090,7 +1096,8 @@ class _HomePageState extends State<HomePage> {
         'pos_z': m.position?['z']?.toDouble(),
     }).toList();
 
-    // Debug: Log monster count being sent
+    // Report HP for known bosses/creatures to bptimer.com
+    _reportKnownMobsHp(storage);
 
     // Current Player Position
     final myUid = storage.currentPlayerUuid;
@@ -1221,6 +1228,43 @@ class _HomePageState extends State<HomePage> {
       'lineId': storage.lineId,
       'selectedPlayerUid': _selectedPlayerUid,
     });
+  }
+
+  /// Report HP of known bosses/creatures to bptimer.com
+  /// Called from _updateOverlay every 500ms — throttled inside BPTimerService
+  void _reportKnownMobsHp(DataStorage storage) {
+    // Detect line change and clear throttle
+    if (storage.lineId != _lastReportedLineId) {
+      if (_lastReportedLineId != 0) {
+        _bpTimerService.clearReportThrottle();
+      }
+      _lastReportedLineId = storage.lineId;
+    }
+
+    final lineId = storage.lineId;
+    if (lineId <= 0) return; // Not on a line yet
+
+    for (final monster in storage.monsterInfoDatas.values) {
+      if (monster.templateId == null) continue;
+      if (!_bpTimerService.isKnownMob(monster.templateId!)) continue;
+      if (monster.isDead) continue;
+
+      // Need both HP and maxHP to compute percentage
+      final hp = monster.hp;
+      final maxHp = monster.maxHp;
+      if (hp == null || maxHp == null || maxHp == Int64.ZERO) continue;
+
+      final hpPercent = (hp.toDouble() / maxHp.toDouble()) * 100.0;
+
+      _bpTimerService.reportHp(
+        monsterId: monster.templateId!,
+        hpPercent: hpPercent,
+        line: lineId,
+        posX: monster.position?['x'] ?? 0.0,
+        posY: monster.position?['y'] ?? 0.0,
+        posZ: monster.position?['z'] ?? 0.0,
+      );
+    }
   }
 
   Future<void> _onPacketData(dynamic event) async {

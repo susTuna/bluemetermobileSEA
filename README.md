@@ -46,14 +46,15 @@ L'application affiche les informations de combat en temps réel via un overlay A
 ### Installation
 
 1. Cloner le dépôt et ouvrir le projet Flutter.
-2. Construire l'APK :
+2. Créé un fichier dart_defines.json avec : {"BPTIMER_API_KEY": "xxxxxxxxxxxx"} (Demander à bptimer pour obtenir une clé)
+3. Construire l'APK :
 
 ```bash
-flutter build apk --release
+flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-define-from-file=dart_defines.json
 ```
 
-3. Installer l'APK sur l'appareil Android.
-4. Autoriser la permission d'affichage par-dessus les autres applications.
+4. Installer l'APK sur l'appareil Android.
+5. Autoriser la permission d'affichage par-dessus les autres applications.
 
 ### Utilisation
 
@@ -120,14 +121,15 @@ The app provides real-time combat information through an Android floating overla
 ### Installation
 
 1. Clone the repository and open the Flutter project.
-2. Build the APK:
+2. Create a file dart_defines.json with : {"BPTIMER_API_KEY": "xxxxxxxxxxxx"} (Ask to bptimer for a key)
+3. Build the APK:
 
 ```bash
-flutter build apk --release
+flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-define-from-file=dart_defines.json
 ```
 
-3. Install the APK on your Android device.
-4. Allow the "display over other apps" permission.
+4. Install the APK on your Android device.
+5. Allow the "display over other apps" permission.
 
 ### Usage
 

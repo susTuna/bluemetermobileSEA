@@ -75,7 +75,10 @@ class SyncContainerDirtyDataProcessor implements IMessageProcessor {
           reader.readLong();
           return true;
         case 2: // AccountId (string)
-          reader.readString();
+          final accountId = reader.readString();
+          if (accountId.isNotEmpty) {
+            _storage.setAccountId(accountId);
+          }
           return true;
         case 3: // ShowId (long)
           reader.readLong();

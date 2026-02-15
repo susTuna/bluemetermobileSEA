@@ -4,15 +4,33 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/hunt_mob.dart';
+import '../state/data_storage.dart';
 
 /// Service to interact with bptimer.com API for mob tracking
 class BPTimerService extends ChangeNotifier {
+  static final BPTimerService _instance = BPTimerService._internal();
+  factory BPTimerService() => _instance;
+  BPTimerService._internal();
+
   static const String _baseUrl = 'https://db.bptimer.com/api';
   static const String _region = 'NA';
+
+  // API key injected at build time via --dart-define-from-file
+  static const String _apiKey = String.fromEnvironment('BPTIMER_API_KEY');
 
   List<HuntMob> _mobs = [];
   // mobId -> list of channel statuses
   Map<String, List<MobChannelStatus>> _channelStatuses = {};
+
+  // Cache: monsterId (in-game ID) -> HuntMob for quick lookup
+  Map<int, HuntMob> _mobsByMonsterId = {};
+  bool _mobsCached = false;
+  DateTime? _mobsCacheTime;
+  static const Duration _mobsCacheDuration = Duration(hours: 1);
+
+  // HP report throttle: monsterId -> last reported 5% bucket
+  // e.g. 28% -> bucket 25, 20% -> bucket 20
+  final Map<String, int> _lastReportedBucket = {};
 
   WebSocketChannel? _wsChannel;
   StreamSubscription? _wsSubscription;
@@ -30,6 +48,12 @@ class BPTimerService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  /// Check if a monster (by in-game templateId) is a known boss/creature
+  bool isKnownMob(int monsterId) => _mobsByMonsterId.containsKey(monsterId);
+
+  /// Get HuntMob by in-game monster ID
+  HuntMob? getMobByMonsterId(int monsterId) => _mobsByMonsterId[monsterId];
+
   /// Get bosses only
   List<HuntMob> get bosses => _mobs.where((m) => m.isBoss).toList();
 
@@ -44,8 +68,15 @@ class BPTimerService extends ChangeNotifier {
     return alive.take(3).toList();
   }
 
-  /// Load mob list from API
-  Future<void> loadMobs() async {
+  /// Load mob list from API (cached for 1 hour)
+  Future<void> loadMobs({bool force = false}) async {
+    // Return cached data if still valid
+    if (!force && _mobsCached && _mobsCacheTime != null) {
+      if (DateTime.now().difference(_mobsCacheTime!) < _mobsCacheDuration) {
+        return;
+      }
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -60,6 +91,11 @@ class BPTimerService extends ChangeNotifier {
         final items = data['items'] as List;
         _mobs = items.map((item) => HuntMob.fromJson(item)).toList();
         
+        // Build lookup map by in-game monster ID
+        _mobsByMonsterId = {for (final m in _mobs) m.monsterId: m};
+        _mobsCached = true;
+        _mobsCacheTime = DateTime.now();
+
         // Sort: bosses first, then magical creatures, alphabetically within each group
         _mobs.sort((a, b) {
           if (a.type != b.type) {
@@ -79,6 +115,96 @@ class BPTimerService extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Ensure mobs are loaded (uses cache if available)
+  Future<void> ensureMobsLoaded() => loadMobs();
+
+  /// Report HP for a known boss/creature to bptimer.com
+  ///
+  /// Only sends a report when HP crosses a 5% boundary downward.
+  /// e.g. 28% -> waits until 25%, then next report at 20%, etc.
+  ///
+  /// [monsterId] - In-game template ID of the monster
+  /// [hpPercent] - Current HP percentage (0-100)
+  /// [line] - Current channel/line number
+  /// [posX], [posY], [posZ] - Monster position
+  /// [uid] - Player's in-game UID
+  Future<void> reportHp({
+    required int monsterId,
+    required double hpPercent,
+    required int line,
+    required double posX,
+    required double posY,
+    required double posZ,
+  }) async {
+    // Only report for known mobs
+    if (!isKnownMob(monsterId)) return;
+
+    // Ensure we have the API key
+    if (_apiKey.isEmpty) {
+      debugPrint('BPTimer: API key not configured');
+      return;
+    }
+
+    // Get account info from DataStorage
+    final storage = DataStorage();
+    final accountId = storage.accountId;
+    final playerUid = storage.currentPlayerUuid;
+
+    if (accountId == null || accountId.isEmpty) {
+      debugPrint('BPTimer: accountId not available yet');
+      return;
+    }
+
+    // Throttle: compute 5% bucket (floor to nearest 5)
+    final int hpPctInt = hpPercent.floor();
+    final int bucket = (hpPctInt ~/ 5) * 5;
+
+    // Create a unique key per monster instance + line
+    final throttleKey = '${monsterId}_$line';
+
+    final lastBucket = _lastReportedBucket[throttleKey];
+    if (lastBucket != null && bucket >= lastBucket) {
+      // Haven't crossed to a lower 5% bucket yet, skip
+      return;
+    }
+
+    // Update the last reported bucket
+    _lastReportedBucket[throttleKey] = bucket;
+
+    // Send the report (fire and forget, ignore 200/403)
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/create-hp-report'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': _apiKey,
+        },
+        body: json.encode({
+          'monster_id': monsterId,
+          'hp_pct': bucket,
+          'line': line,
+          'pos_x': posX,
+          'pos_y': posY,
+          'pos_z': posZ,
+          'account_id': accountId,
+          'uid': playerUid.toString(),
+        }),
+      );
+      // Intentionally ignore response (200 = ok, 403 = already reported by someone else)
+    } catch (e) {
+      debugPrint('BPTimer: Error reporting HP: $e');
+    }
+  }
+
+  /// Clear throttle state (e.g. on line change or mob respawn)
+  void clearReportThrottle([String? throttleKey]) {
+    if (throttleKey != null) {
+      _lastReportedBucket.remove(throttleKey);
+    } else {
+      _lastReportedBucket.clear();
+    }
   }
 
   /// Load channel statuses for all mobs

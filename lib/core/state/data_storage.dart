@@ -29,6 +29,16 @@ class DataStorage extends ChangeNotifier {
 
   Int64 _currentPlayerUuid = Int64.ZERO;
   Int64 get currentPlayerUuid => _currentPlayerUuid;
+
+  String? _accountId;
+  String? get accountId => _accountId;
+
+  void setAccountId(String id) {
+    if (id.isNotEmpty && _accountId != id) {
+      _accountId = id;
+      _scheduleNotify();
+    }
+  }
   
   set currentPlayerUuid(Int64 value) {
     if (_currentPlayerUuid != value) {
