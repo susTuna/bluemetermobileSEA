@@ -48,7 +48,7 @@ class _NearbyViewState extends State<NearbyView> {
     if (pos1 == null || pos2 == null) return 0.0;
     final dx = (pos2['x'] ?? 0) - (pos1['x'] ?? 0);
     final dz = (pos2['z'] ?? 0) - (pos1['z'] ?? 0);
-    return atan2(dx, dz); // 0 = north (+Z), positive = clockwise
+    return atan2(dx, dz)-180; // 0 = north (+Z), positive = clockwise
   }
 
   bool _isValidMonster(MonsterInfo m) {
