@@ -8,13 +8,13 @@ import 'package:bluemeter_mobile/views/dps_view.dart';
 import 'package:bluemeter_mobile/views/nearby_view.dart';
 import 'package:bluemeter_mobile/views/tools_view.dart';
 import 'package:bluemeter_mobile/views/hunt_view.dart';
+import 'package:bluemeter_mobile/views/settings_view.dart';
 import 'package:bluemeter_mobile/widgets/player_detail_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:fixnum/fixnum.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'core/analyze/packet_analyzer_v2.dart';
 import 'core/state/data_storage.dart';
 import 'core/services/monster_name_service.dart';
@@ -22,6 +22,7 @@ import 'core/services/bptimer_service.dart';
 import 'core/models/dps_data.dart';
 import 'core/models/player_info.dart';
 
+import 'core/models/overlay_settings.dart';
 import 'core/services/logger_service.dart';
 
 // ...
@@ -61,14 +62,13 @@ class OverlayWidget extends StatefulWidget {
 
 class _OverlayWidgetState extends State<OverlayWidget> {
   final LoggerService _logger = LoggerService();
-  // late TabController _tabController; // Moved to DpsView
   List<Map<String, dynamic>> _players = [];
   int _combatTime = 0;
   int _lineId = 0;
   String? _selectedPlayerUid; 
   
   // Navigation State
-  int _mainTabIndex = 0; // 0=DPS, 1=Nearby, 2=Tools, 3=Hunt
+  int _mainTabIndex = 0; // 0=DPS, 1=Nearby, 2=Tools, 3=Hunt, 4=Settings
   int _dpsTabIndex = 0; // 0=DPS(sword), 1=Taken(shield), 2=Heal(cross)
 
   // Track window position
@@ -78,30 +78,26 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   // Store original window size before showing detail
   double _savedWidth = 600;
   double _savedHeight = 400;
-  
-  // Persistent positions
-  double _fullX = 0;
-  double _fullY = 100;
-  double _miniX = 0;
-  double _miniY = 100;
 
-  // Drag helpers
-  double _lastMoveX = 0;
-  double _lastMoveY = 0;
-  double _windowDeltaX = 0;
-  double _windowDeltaY = 0;
+  // Screen dimensions (received from main app via IPC)
+  double _screenWidth = 0;
+  double _screenHeight = 0;
+
+  // Drag helpers – simple per-frame delta from globalPosition
+  double _lastGlobalX = 0;
+  double _lastGlobalY = 0;
   Size? _resizeStartWindowSize;
   Offset? _dragStartTouchPosition; // Keep for resize
   bool _isDragging = false;
 
-  // Minimize state
-  bool _isMinimized = false;
-  double _restoredWidth = 600;
-  double _restoredHeight = 400;
+  // Overlay settings (theme, opacity, positions, minimized state)
+  late OverlaySettings _settings;
+  bool _settingsLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     FlutterOverlayWindow.overlayListener.listen((event) {
       if (event is List) {
         setState(() {
@@ -121,7 +117,6 @@ class _OverlayWidgetState extends State<OverlayWidget> {
           // Update selectedPlayerUid when it's explicitly sent
           if (event.containsKey('selectedPlayerUid')) {
             final newUid = event['selectedPlayerUid'] as String?;
-            // _logger.log("Overlay received selectedPlayerUid: $newUid");
             
             // If switching to detail view, save current window size
             if (newUid != null && _selectedPlayerUid == null) {
@@ -129,6 +124,12 @@ class _OverlayWidgetState extends State<OverlayWidget> {
             }
             
             _selectedPlayerUid = newUid;
+          }
+
+          // Receive screen dimensions from main app
+          if (event.containsKey('screenWidth')) {
+            _screenWidth = (event['screenWidth'] as num).toDouble();
+            _screenHeight = (event['screenHeight'] as num).toDouble();
           }
 
           // Sync DataStorage for NearbyView
@@ -199,37 +200,50 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     });
   }
 
+  Future<void> _loadSettings() async {
+    final s = await OverlaySettings.load();
+    if (!mounted) return;
+    setState(() {
+      _settings = s;
+      _settingsLoaded = true;
+      _windowX = s.isMinimized ? s.miniX : s.fullX;
+      _windowY = s.isMinimized ? s.miniY : s.fullY;
+      _savedWidth = s.fullWidth;
+    });
+    // Apply saved state after the overlay is fully ready
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (s.isMinimized) {
+          await FlutterOverlayWindow.resizeOverlay(135, 30, false);
+        } else {
+          await FlutterOverlayWindow.resizeOverlay(s.fullWidth.toInt(), s.fullHeight.toInt(), false);
+        }
+        await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
+      } catch (e) {
+        _logger.error('Error applying saved overlay state', error: e);
+      }
+    });
+  }
+
   Future<void> _savePosition() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_isMinimized) {
-      _miniX = _windowX;
-      _miniY = _windowY;
-      await prefs.setDouble('overlay_mini_x', _miniX);
-      await prefs.setDouble('overlay_mini_y', _miniY);
+    if (_settings.isMinimized) {
+      _settings.miniX = _windowX;
+      _settings.miniY = _windowY;
     } else {
-      _fullX = _windowX;
-      _fullY = _windowY;
-      await prefs.setDouble('overlay_full_x', _fullX);
-      await prefs.setDouble('overlay_full_y', _fullY);
+      _settings.fullX = _windowX;
+      _settings.fullY = _windowY;
     }
+    await _settings.savePosition(_settings.isMinimized);
   }
 
   Future<void> _saveSize() async {
-    if (_isMinimized) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('overlay_width', _restoredWidth);
-    await prefs.setDouble('overlay_height', _restoredHeight);
-  }
-
-  Future<void> _saveMinimizedState() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('overlay_minimized', _isMinimized);
+    if (_settings.isMinimized) return;
+    await _settings.saveSize();
   }
 
   void _saveCurrentWindowSize() {
-    // Save current window size from _restoredWidth and _restoredHeight
-    _savedWidth = _restoredWidth;
-    _savedHeight = _restoredHeight;
+    _savedWidth = _settings.fullWidth;
+    _savedHeight = _settings.fullHeight;
     _logger.log("Saved window size: $_savedWidth" "x" "$_savedHeight");
   }
 
@@ -255,6 +269,33 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     }
   }
 
+  Future<void> _applyAnchor(OverlayAnchor anchor) async {
+    // Use screen dimensions received from main app via IPC
+    if (_screenWidth <= 0 || _screenHeight <= 0) {
+      _logger.error('Screen dimensions not available yet');
+      return;
+    }
+
+    final x = _screenWidth * anchor.xPercent / 100.0;
+    final y = _screenHeight * anchor.yPercent / 100.0;
+    final w = _screenWidth * anchor.wPercent / 100.0;
+    final h = _screenHeight * anchor.hPercent / 100.0;
+
+    setState(() {
+      _windowX = x;
+      _windowY = y;
+      _settings.fullX = x;
+      _settings.fullY = y;
+      _settings.fullWidth = w;
+      _settings.fullHeight = h;
+      _settings.isMinimized = false;
+    });
+
+    await FlutterOverlayWindow.resizeOverlay(w.toInt(), h.toInt(), false);
+    await FlutterOverlayWindow.moveOverlay(OverlayPosition(x, y));
+    await _settings.saveAll();
+  }
+
   @override
   void dispose() {
     // _tabController.dispose();
@@ -263,6 +304,10 @@ class _OverlayWidgetState extends State<OverlayWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_settingsLoaded) {
+      return const SizedBox.shrink();
+    }
+
     // Si un joueur est sélectionné, afficher la carte de détails
     if (_selectedPlayerUid != null) {
       // Resize window for detail view
@@ -273,23 +318,25 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     }
     
     // Sinon afficher la liste normale
-    if (_isMinimized) {
+    if (_settings.isMinimized) {
       return _buildMinimized();
     }
     return _buildFull();
   }
 
-  BoxDecoration get _windowDecoration => BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(0),
-        // Border-left
-        border: Border(
-          left: BorderSide(
-            color: Colors.white.withValues(alpha: 0.9),
-            width: 0.5,
-          ),
+  BoxDecoration get _windowDecoration {
+    final theme = _settings.theme;
+    return BoxDecoration(
+      color: theme.backgroundColor.withValues(alpha: _settings.backgroundOpacity),
+      borderRadius: BorderRadius.circular(0),
+      border: Border(
+        left: BorderSide(
+          color: theme.borderColor.withValues(alpha: 0.9),
+          width: 0.5,
         ),
-      );
+      ),
+    );
+  }
 
   Widget _buildMinimized() {
     // Determine keys based on tab index
@@ -334,32 +381,19 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     return Material(
       color: Colors.transparent,
       child: GestureDetector(
-        onPanStart: (details) async {
-             _isDragging = false;
-             try {
-               final pos = await FlutterOverlayWindow.getOverlayPosition();
-               _windowX = pos.x;
-               _windowY = pos.y;
-               _lastMoveX=details.globalPosition.dx;
-               _lastMoveY=details.globalPosition.dy;
-               _windowDeltaX=0;
-               _windowDeltaY=0;
-               _isDragging = true;
-             } catch (e) {
-               debugPrint("Error getting overlay position: $e");
-             }
+        onPanStart: (details) {
+             _lastGlobalX = details.globalPosition.dx;
+             _lastGlobalY = details.globalPosition.dy;
+             _isDragging = true;
         },
         onPanUpdate: (details) {
              if (!_isDragging) return;
-             final dpr = MediaQuery.of(context).devicePixelRatio;
-             _windowDeltaX= details.globalPosition.dx-_lastMoveX;
-             _windowDeltaY= details.globalPosition.dy - _lastMoveY;
-             
-             // Update local tracking
-             _windowX += _windowDeltaX/dpr;
-             _windowY += _windowDeltaY/dpr;
-             _lastMoveX = details.globalPosition.dx;
-             _lastMoveY = details.globalPosition.dy;
+             final dx = details.globalPosition.dx - _lastGlobalX;
+             final dy = details.globalPosition.dy - _lastGlobalY;
+             _windowX += dx;
+             _windowY += dy;
+             _lastGlobalX = details.globalPosition.dx;
+             _lastGlobalY = details.globalPosition.dy;
 
              FlutterOverlayWindow.moveOverlay(
                OverlayPosition(_windowX, _windowY),
@@ -371,17 +405,17 @@ class _OverlayWidgetState extends State<OverlayWidget> {
         },
         onTap: () async {
           setState(() {
-            _isMinimized = false;
+            _settings.isMinimized = false;
           });
-          _saveMinimizedState();
+          _settings.saveMinimizedState();
           
           // Restore full position
-          _windowX = _fullX;
-          _windowY = _fullY;
+          _windowX = _settings.fullX;
+          _windowY = _settings.fullY;
           
           await FlutterOverlayWindow.resizeOverlay(
-            _restoredWidth.toInt(),
-            _restoredHeight.toInt(),
+            _settings.fullWidth.toInt(),
+            _settings.fullHeight.toInt(),
             false,
           );
           await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
@@ -396,13 +430,13 @@ class _OverlayWidgetState extends State<OverlayWidget> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(headerIcon, size: 16, color: Colors.blue),
+                  Icon(headerIcon, size: 16, color: _settings.theme.accentColor),
                   const SizedBox(width: 4),
                   if (myRank > 0)
                     Text(
                       "#$myRank",
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: _settings.theme.textColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -413,8 +447,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                 child: Text(
                   _formatNumber(myVal),
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: _settings.theme.textColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
@@ -428,7 +462,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                      sendPort.send("RESET");
                    }
                 },
-                child: const Icon(Icons.refresh, size: 16, color: Colors.white70),
+                child: Icon(Icons.refresh, size: 16, color: _settings.theme.secondaryTextColor),
               ),
             ],
           ),
@@ -449,7 +483,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                 // Vertical Side Menu
                 Container(
                   width: 26,
-                  color: Colors.black.withValues(alpha: 0.6),
+                  color: _settings.theme.sidebarColor.withValues(alpha: _settings.backgroundOpacity * 0.75),
                   child: Column(
                     children: [
                       const SizedBox(height: 4),
@@ -461,6 +495,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                       // _buildSideTab(2, Icons.build),
                       // Tab 3: Hunt (Boss/Creature Tracker)
                       _buildSideTab(3, Icons.hub_outlined),
+                      // Tab 4: Settings
+                      _buildSideTab(4, Icons.settings),
                     ],
                   ),
                 ),
@@ -470,33 +506,19 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                     children: [
                       // Draggable Title Bar / Header (Timer + Window Controls)
                       GestureDetector(
-                        onPanStart: (details) async {
-                          _isDragging = false;
-                          try {
-                            final pos = await FlutterOverlayWindow.getOverlayPosition();
-                            // Convert physical position (from native) to logical pixels (for Flutter)
-                            _windowX = pos.x;
-                            _windowY = pos.y;
-                            _lastMoveX=details.globalPosition.dx;
-                            _lastMoveY=details.globalPosition.dy;
-                            _windowDeltaX=0;
-                            _windowDeltaY=0;
-                            _isDragging = true;
-                          } catch (e) {
-                            debugPrint("Error getting overlay position: $e");
-                          }
+                        onPanStart: (details) {
+                          _lastGlobalX = details.globalPosition.dx;
+                          _lastGlobalY = details.globalPosition.dy;
+                          _isDragging = true;
                         },
                         onPanUpdate: (details) {
                           if (!_isDragging) return;
-                            final dpr = MediaQuery.of(context).devicePixelRatio;
-                            
-                          _windowDeltaX= details.globalPosition.dx-_lastMoveX;
-                          _windowDeltaY= details.globalPosition.dy - _lastMoveY;
-                          
-                          _windowX += _windowDeltaX/dpr;
-                          _windowY += _windowDeltaY/dpr;
-                          _lastMoveX = details.globalPosition.dx;
-                          _lastMoveY = details.globalPosition.dy;
+                          final dx = details.globalPosition.dx - _lastGlobalX;
+                          final dy = details.globalPosition.dy - _lastGlobalY;
+                          _windowX += dx;
+                          _windowY += dy;
+                          _lastGlobalX = details.globalPosition.dx;
+                          _lastGlobalY = details.globalPosition.dy;
                           
                           FlutterOverlayWindow.moveOverlay(
                             OverlayPosition(_windowX, _windowY),
@@ -516,11 +538,11 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                               // Line number (Left aligned in this area)
                               Text(
                                 _lineId > 0 ? 'L${_lineId}' : '—',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: _settings.theme.textColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  shadows: [Shadow(blurRadius: 2, color: Colors.black)],
+                                  shadows: const [Shadow(blurRadius: 2, color: Colors.black)],
                                 ),
                               ),
                               // Window Actions (Right aligned)
@@ -530,20 +552,20 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                   GestureDetector(
                                     onTap: () async {
                                       setState(() {
-                                        _isMinimized = true;
+                                        _settings.isMinimized = true;
                                       });
-                                      _saveMinimizedState();
+                                      _settings.saveMinimizedState();
                                       
                                       // Restore mini position
-                                      _windowX = _miniX;
-                                      _windowY = _miniY;
+                                      _windowX = _settings.miniX;
+                                      _windowY = _settings.miniY;
                                       
                                       await FlutterOverlayWindow.resizeOverlay(135, 30, false);
                                       await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
                                     },
-                                    child: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 2),
-                                      child: Icon(Icons.remove, size: 14, color: Colors.white70),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                                      child: Icon(Icons.remove, size: 14, color: _settings.theme.secondaryTextColor),
                                     ),
                                   ),
                                   GestureDetector(
@@ -553,9 +575,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                          sendPort.send("RESET");
                                        }
                                     },
-                                    child: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 2),
-                                      child: Icon(Icons.refresh, size: 14, color: Colors.white70),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                                      child: Icon(Icons.refresh, size: 14, color: _settings.theme.secondaryTextColor),
                                     ),
                                   ),
                                 ],
@@ -585,6 +607,12 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                             NearbyView(isActive: _mainTabIndex == 1),
                             const ToolsView(),
                             HuntView(isActive: _mainTabIndex == 3),
+                            SettingsView(
+                              settings: _settings,
+                              onThemeChanged: () => setState(() {}),
+                              onOpacityChanged: () => setState(() {}),
+                              onAnchorSelected: (anchor) => _applyAnchor(anchor),
+                            ),
                           ],
                         ),
                       ),
@@ -619,8 +647,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                   if (newHeight < 100) newHeight = 100;
 
                   // Save for restore
-                  _restoredWidth = newWidth;
-                  _restoredHeight = newHeight;
+                  _settings.fullWidth = newWidth;
+                  _settings.fullHeight = newHeight;
 
                   FlutterOverlayWindow.resizeOverlay(
                     newWidth.toInt(),
@@ -649,6 +677,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
 
   Widget _buildSideTab(int index, IconData icon) {
     final isSelected = _mainTabIndex == index;
+    final theme = _settings.theme;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -658,10 +687,10 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       child: Container(
         height: 26,
         width: 26,
-        color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+        color: isSelected ? theme.textColor.withValues(alpha: 0.1) : Colors.transparent,
         child: Icon(
           icon,
-          color: isSelected ? Colors.blue : Colors.white54,
+          color: isSelected ? theme.accentColor : theme.secondaryTextColor,
           size: 16,
         ),
       ),
@@ -810,32 +839,19 @@ class _OverlayWidgetState extends State<OverlayWidget> {
               _selectedPlayerUid = null;
             });
           },
-          onDragStart: (details) async {
-            _isDragging = false;
-            try {
-              final pos = await FlutterOverlayWindow.getOverlayPosition();
-              _windowX = pos.x;
-              _windowY = pos.y;
-              _lastMoveX = details.globalPosition.dx;
-              _lastMoveY = details.globalPosition.dy;
-              _windowDeltaX = 0;
-              _windowDeltaY = 0;
-              _isDragging = true;
-            } catch (e) {
-              _logger.error("Error getting overlay position", error: e);
-            }
+          onDragStart: (details) {
+            _lastGlobalX = details.globalPosition.dx;
+            _lastGlobalY = details.globalPosition.dy;
+            _isDragging = true;
           },
           onDragUpdate: (details) {
             if (!_isDragging) return;
-            final dpr = MediaQuery.of(context).devicePixelRatio;
-            
-            _windowDeltaX = details.globalPosition.dx - _lastMoveX;
-            _windowDeltaY = details.globalPosition.dy - _lastMoveY;
-            
-            _windowX += _windowDeltaX / dpr;
-            _windowY += _windowDeltaY / dpr;
-            _lastMoveX = details.globalPosition.dx;
-            _lastMoveY = details.globalPosition.dy;
+            final dx = details.globalPosition.dx - _lastGlobalX;
+            final dy = details.globalPosition.dy - _lastGlobalY;
+            _windowX += dx;
+            _windowY += dy;
+            _lastGlobalX = details.globalPosition.dx;
+            _lastGlobalY = details.globalPosition.dy;
             
             FlutterOverlayWindow.moveOverlay(
               OverlayPosition(_windowX, _windowY),
@@ -1110,6 +1126,10 @@ class _HomePageState extends State<HomePage> {
     }
     
     // Don't send selectedPlayerUid in regular updates to avoid overwriting close action
+    // Include screen dimensions for overlay anchor calculations
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final screenSizeDp = view.physicalSize / view.devicePixelRatio;
+
     FlutterOverlayWindow.shareData({
       'players': players,
       'combatTime': combatDuration.inSeconds,
@@ -1117,6 +1137,8 @@ class _HomePageState extends State<HomePage> {
       'monsters': monsters,
       'myPos': myPos, 
       'myUid': myUid.toString(),
+      'screenWidth': screenSizeDp.width,
+      'screenHeight': screenSizeDp.height,
     });
   }
 
