@@ -139,9 +139,22 @@ class TcpProxy(
                         
                         onDataReceived(sessionKey.toString(), data)
 
-                        // Forward to client
-                        sendTcpPacket(session, Packet.TCP_ACK, data, outputQueue)
-                        session.mySeq += read
+                        // Forward to client — segment into MSS-sized chunks to respect TUN MTU (1500)
+                        // MSS = MTU(1500) - IP header(20) - TCP header(20) - margin
+                        val MSS = 1400
+                        var offset = 0
+                        while (offset < data.size) {
+                            val chunkSize = minOf(MSS, data.size - offset)
+                            val chunk = data.copyOfRange(offset, offset + chunkSize)
+                            val flags = if (offset + chunkSize >= data.size) {
+                                Packet.TCP_ACK or Packet.TCP_PSH  // PSH on last segment
+                            } else {
+                                Packet.TCP_ACK
+                            }
+                            sendTcpPacket(session, flags, chunk, outputQueue)
+                            session.mySeq += chunkSize
+                            offset += chunkSize
+                        }
                     }
                 }
             } catch (e: IOException) {
