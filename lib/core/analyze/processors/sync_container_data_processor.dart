@@ -49,8 +49,11 @@ class SyncContainerDataProcessor implements IMessageProcessor {
         _storage.ensurePlayer(playerUid);
       }
 
-      // CharBase → name, combat power
+      // CharBase → name, combat power, accountId
       if (vData.hasCharBase()) {
+        if (vData.charBase.accountId.isNotEmpty && isFullPlayerData) {
+          _storage.setAccountId(vData.charBase.accountId);
+        }
         if (vData.charBase.name.isNotEmpty) {
           _storage.setPlayerName(playerUid, vData.charBase.name);
         }

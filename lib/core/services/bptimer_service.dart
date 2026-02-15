@@ -158,11 +158,12 @@ class BPTimerService extends ChangeNotifier {
     }
 
     // Throttle: compute 5% bucket (floor to nearest 5)
-    final int hpPctInt = hpPercent.floor();
+    final int hpPctInt = hpPercent.ceil();
     final int bucket = (hpPctInt ~/ 5) * 5;
 
     // Create a unique key per monster instance + line
     final throttleKey = '${monsterId}_$line';
+
 
     final lastBucket = _lastReportedBucket[throttleKey];
     if (lastBucket != null && bucket >= lastBucket) {
@@ -175,23 +176,26 @@ class BPTimerService extends ChangeNotifier {
 
     // Send the report (fire and forget, ignore 200/403)
     try {
-      await http.post(
+        await http.post(
         Uri.parse('$_baseUrl/create-hp-report'),
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'X-Api-Key': _apiKey,
         },
-        body: json.encode({
+        body: {
           'monster_id': monsterId,
-          'hp_pct': bucket,
+          'hp_pct': bucket, // On arrondi
           'line': line,
           'pos_x': posX,
           'pos_y': posY,
           'pos_z': posZ,
           'account_id': accountId,
           'uid': playerUid.toString(),
-        }),
+        }.entries.map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}').join('&'),
       );
+      // debugPrint('BPTimer: $throttleKey  hpPctInt: $hpPctInt, HP $hpPercent% (bucket $bucket), last bucket: ${_lastReportedBucket[throttleKey]} - pos: ($posX, $posY, $posZ)');
+      // debugPrint('BPTimer rep: ${rep.statusCode} ${rep.body}');
+      // debugPrint('BPTimer data: $data');
       // Intentionally ignore response (200 = ok, 403 = already reported by someone else)
     } catch (e) {
       debugPrint('BPTimer: Error reporting HP: $e');

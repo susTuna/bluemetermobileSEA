@@ -529,6 +529,7 @@ class SyncNearEntities extends GeneratedMessage {
 class CharBase extends GeneratedMessage {
   static final BuilderInfo _i = BuilderInfo('CharBase', package: const PackageName('BlueProto'), createEmptyInstance: create)
     ..aInt64(1, 'charId')
+    ..aOS(2, 'accountId')
     ..aOS(5, 'name')
     ..a<int>(35, 'fightPoint', PbFieldType.O3)
     ..hasRequiredFields = false;
@@ -555,14 +556,19 @@ class CharBase extends GeneratedMessage {
   bool hasCharId() => $_has(0);
   void clearCharId() => clearField(1);
 
-  String get name => $_getSZ(1);
-  set name(String v) { $_setString(1, v); }
-  bool hasName() => $_has(1);
+  String get accountId => $_getSZ(1);
+  set accountId(String v) { $_setString(1, v); }
+  bool hasAccountId() => $_has(1);
+  void clearAccountId() => clearField(2);
+
+  String get name => $_getSZ(2);
+  set name(String v) { $_setString(2, v); }
+  bool hasName() => $_has(2);
   void clearName() => clearField(5);
 
-  int get fightPoint => $_getIZ(2);
-  set fightPoint(int v) { $_setSignedInt32(2, v); }
-  bool hasFightPoint() => $_has(2);
+  int get fightPoint => $_getIZ(3);
+  set fightPoint(int v) { $_setSignedInt32(3, v); }
+  bool hasFightPoint() => $_has(3);
   void clearFightPoint() => clearField(35);
 }
 
