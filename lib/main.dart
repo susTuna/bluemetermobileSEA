@@ -877,7 +877,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BlueMeter Mobile',
+      title: 'BlueMeterSEA Mobile',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
@@ -1410,7 +1410,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('BlueMeter Mobile'),
+        title: const Text('BlueMeterSEA Mobile'),
       ),
       body: Center(
         child: Column(

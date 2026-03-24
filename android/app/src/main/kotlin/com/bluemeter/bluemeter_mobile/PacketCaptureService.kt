@@ -23,6 +23,16 @@ class PacketCaptureService : VpnService() {
     private val flushExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private var flushTask: java.util.concurrent.ScheduledFuture<*>? = null
     private var isRunning = false
+
+    private val allowedGamePackages = listOf(
+        "com.bpsr.apj",
+        "sea.haoplay.game.gp.bpsr"
+    )
+
+    private fun toHexPrefix(data: ByteArray, max: Int = 32): String {
+        val n = minOf(data.size, max)
+        return (0 until n).joinToString(" ") { i -> "%02x".format(data[i]) }
+    }
     
     private lateinit var tcpProxy: TcpProxy
     private val outputQueue = ConcurrentLinkedQueue<ByteBuffer>()
@@ -210,10 +220,10 @@ class PacketCaptureService : VpnService() {
             }
 
             // ── 6) Unknown session → log first data for diagnosis ──
-            // if (data.size >= 6) {
-                // val hex = data.take(12).joinToString(" ") { "%02x".format(it) }
-                // Log.i("BlueMeter", "Unknown session data: $source — first bytes: $hex (${data.size}B)")
-            // }
+            if (data.size >= 6) {
+                val hex = toHexPrefix(data, 24)
+                Log.i("BlueMeterDiag", "session=$source len=${data.size} first=$hex")
+            }
         }
 
         val builder = Builder()
@@ -222,10 +232,18 @@ class PacketCaptureService : VpnService() {
         builder.addRoute("0.0.0.0", 0)
         builder.setMtu(1500)
         // Only capture game traffic — all other apps bypass the VPN
-        try {
-            builder.addAllowedApplication("com.bpsr.apj")
-        } catch (e: Exception) {
-            Log.w("BlueMeter", "Could not restrict VPN to game app: ${e.message}")
+        var addedApps = 0
+        for (pkg in allowedGamePackages) {
+            try {
+                builder.addAllowedApplication(pkg)
+                addedApps++
+            } catch (e: Exception) {
+                Log.w("BlueMeter", "Could not restrict VPN to game app: ${e.message}")
+            }
+        }
+
+        if (addedApps == 0) {
+            Log.w("BlueMeter", "No allowed game package matched. VPN may capture nothing.")
         }
         
         try {

@@ -62,7 +62,7 @@ class MobChannelStatus {
       channelNumber: json['channel_number'] as int,
       lastHp: json['last_hp'] as int? ?? 0,
       lastUpdate: DateTime.tryParse(json['last_update'] as String? ?? '') ?? DateTime.now(),
-      region: json['region'] as String? ?? 'NA',
+      region: json['region'] as String? ?? 'SEA',
     );
   }
 }

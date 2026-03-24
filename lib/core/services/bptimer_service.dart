@@ -13,7 +13,8 @@ class BPTimerService extends ChangeNotifier {
   BPTimerService._internal();
 
   static const String _baseUrl = 'https://db.bptimer.com/api';
-  static const String _region = 'NA';
+  static const String _region = 'SEA';
+  static const bool _debugRegion = true;
 
   // API key injected at build time via --dart-define-from-file
   static const String _apiKey = String.fromEnvironment('BPTIMER_API_KEY');
@@ -58,12 +59,21 @@ class BPTimerService extends ChangeNotifier {
   List<HuntMob> get bosses => _mobs.where((m) => m.isBoss).toList();
 
   /// Get magical creatures only
-  List<HuntMob> get magicalCreatures => _mobs.where((m) => m.isMagicalCreature).toList();
+  List<HuntMob> get magicalCreatures =>
+      _mobs.where((m) => m.isMagicalCreature).toList();
 
   /// Get top 3 channels with HP > 0 for a given mob, sorted by HP ascending
   List<MobChannelStatus> getTopChannels(String mobId) {
     final statuses = _channelStatuses[mobId] ?? [];
-    final alive = statuses.where((s) => s.lastHp > 0 && s.lastUpdate.isAfter(DateTime.now().subtract(const Duration(minutes: 5)))).toList();
+    final alive = statuses
+        .where(
+          (s) =>
+              s.lastHp > 0 &&
+              s.lastUpdate.isAfter(
+                DateTime.now().subtract(const Duration(minutes: 5)),
+              ),
+        )
+        .toList();
     alive.sort((a, b) => a.lastHp.compareTo(b.lastHp));
     return alive.take(3).toList();
   }
@@ -90,7 +100,7 @@ class BPTimerService extends ChangeNotifier {
         final data = json.decode(response.body);
         final items = data['items'] as List;
         _mobs = items.map((item) => HuntMob.fromJson(item)).toList();
-        
+
         // Build lookup map by in-game monster ID
         _mobsByMonsterId = {for (final m in _mobs) m.monsterId: m};
         _mobsCached = true;
@@ -164,7 +174,6 @@ class BPTimerService extends ChangeNotifier {
     // Create a unique key per monster instance + line
     final throttleKey = '${monsterId}_$line';
 
-
     final lastBucket = _lastReportedBucket[throttleKey];
     if (lastBucket != null && bucket >= lastBucket) {
       // Haven't crossed to a lower 5% bucket yet, skip
@@ -176,22 +185,28 @@ class BPTimerService extends ChangeNotifier {
 
     // Send the report (fire and forget, ignore 200/403)
     try {
-        await http.post(
+      await http.post(
         Uri.parse('$_baseUrl/create-hp-report'),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'X-Api-Key': _apiKey,
         },
-        body: {
-          'monster_id': monsterId,
-          'hp_pct': bucket, // On arrondi
-          'line': line,
-          'pos_x': posX,
-          'pos_y': posY,
-          'pos_z': posZ,
-          'account_id': accountId,
-          'uid': playerUid.toString(),
-        }.entries.map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}').join('&'),
+        body:
+            {
+                  'monster_id': monsterId,
+                  'hp_pct': bucket, // On arrondi
+                  'line': line,
+                  'pos_x': posX,
+                  'pos_y': posY,
+                  'pos_z': posZ,
+                  'account_id': accountId,
+                  'uid': playerUid.toString(),
+                }.entries
+                .map(
+                  (e) =>
+                      '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}',
+                )
+                .join('&'),
       );
       // debugPrint('BPTimer: $throttleKey  hpPctInt: $hpPctInt, HP $hpPercent% (bucket $bucket), last bucket: ${_lastReportedBucket[throttleKey]} - pos: ($posX, $posY, $posZ)');
       // debugPrint('BPTimer rep: ${rep.statusCode} ${rep.body}');
@@ -211,6 +226,12 @@ class BPTimerService extends ChangeNotifier {
     }
   }
 
+  void _logRegion(String msg) {
+    if (kDebugMode && _debugRegion) {
+      debugPrint('BPTimer: Region: [$_region]: $msg');
+    }
+  }
+
   /// Load channel statuses for all mobs
   Future<void> _loadChannelStatuses() async {
     if (_mobs.isEmpty) return;
@@ -218,6 +239,7 @@ class BPTimerService extends ChangeNotifier {
     // Build filter string with all mob IDs
     final filterParts = _mobs.map((m) => "mob = '${m.id}'").join(' || ');
     final filter = '($filterParts) && region = \'$_region\'';
+    _logRegion('ChannelStatus filter=$filter');
 
     try {
       final response = await http.get(
@@ -225,10 +247,12 @@ class BPTimerService extends ChangeNotifier {
           '$_baseUrl/collections/mob_channel_status/records?page=1&perPage=1000&skipTotal=true&filter=${Uri.encodeComponent(filter)}',
         ),
       );
+      _logRegion('RES channel_status=${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final items = data['items'] as List;
+        _logRegion('channel_status items=${items.length}');
 
         _channelStatuses = {};
         for (final item in items) {
@@ -263,49 +287,50 @@ class BPTimerService extends ChangeNotifier {
       _sseSubscription = streamedResponse.stream
           .transform(utf8.decoder)
           .listen(
-        (chunk) {
-          buffer += chunk;
+            (chunk) {
+              buffer += chunk;
 
-          // Process complete SSE messages
-          while (buffer.contains('\n\n')) {
-            final endIndex = buffer.indexOf('\n\n');
-            final message = buffer.substring(0, endIndex);
-            buffer = buffer.substring(endIndex + 2);
+              // Process complete SSE messages
+              while (buffer.contains('\n\n')) {
+                final endIndex = buffer.indexOf('\n\n');
+                final message = buffer.substring(0, endIndex);
+                buffer = buffer.substring(endIndex + 2);
 
-            String? currentEvent;
-            String? currentData;
+                String? currentEvent;
+                String? currentData;
 
-            for (final line in message.split('\n')) {
-              if (line.startsWith('event:')) {
-                currentEvent = line.substring(6).trim();
-              } else if (line.startsWith('data:')) {
-                currentData = line.substring(5).trim();
+                for (final line in message.split('\n')) {
+                  if (line.startsWith('event:')) {
+                    currentEvent = line.substring(6).trim();
+                  } else if (line.startsWith('data:')) {
+                    currentData = line.substring(5).trim();
+                  }
+                }
+
+                if (currentEvent == 'PB_CONNECT' && currentData != null) {
+                  _handlePBConnect(currentData!);
+                } else if (currentEvent == 'mob_hp_updates_sea' &&
+                    currentData != null) {
+                  _handleHpUpdate(currentData!);
+                }
               }
-            }
-
-            if (currentEvent == 'PB_CONNECT' && currentData != null) {
-              _handlePBConnect(currentData!);
-            } else if (currentEvent == 'mob_hp_updates' && currentData != null) {
-              _handleHpUpdate(currentData!);
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint('SSE error: $error');
-          _isConnected = false;
-          notifyListeners();
-          Future.delayed(const Duration(seconds: 5), () {
-            if (!_isConnected) _connectSSE();
-          });
-        },
-        onDone: () {
-          _isConnected = false;
-          notifyListeners();
-          Future.delayed(const Duration(seconds: 5), () {
-            if (!_isConnected) _connectSSE();
-          });
-        },
-      );
+            },
+            onError: (error) {
+              debugPrint('SSE error: $error');
+              _isConnected = false;
+              notifyListeners();
+              Future.delayed(const Duration(seconds: 5), () {
+                if (!_isConnected) _connectSSE();
+              });
+            },
+            onDone: () {
+              _isConnected = false;
+              notifyListeners();
+              Future.delayed(const Duration(seconds: 5), () {
+                if (!_isConnected) _connectSSE();
+              });
+            },
+          );
     } catch (e) {
       debugPrint('SSE connection error: $e');
       _isConnected = false;
@@ -316,7 +341,7 @@ class BPTimerService extends ChangeNotifier {
     }
   }
 
-  /// Handle PB_CONNECT: extract clientId and subscribe to mob_hp_updates
+  /// Handle PB_CONNECT: extract clientId and subscribe to mob_hp_updates_sea
   void _handlePBConnect(String dataStr) async {
     try {
       final data = json.decode(dataStr);
@@ -325,21 +350,23 @@ class BPTimerService extends ChangeNotifier {
 
       debugPrint('SSE connected with clientId: $clientId');
 
-      // Subscribe to mob_hp_updates via POST /api/realtime
+      // Subscribe to mob_hp_updates_sea via POST /api/realtime
       final response = await http.post(
         Uri.parse('$_baseUrl/realtime'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'clientId': clientId,
-          'subscriptions': ['mob_hp_updates'],
+          'subscriptions': ['mob_hp_updates_sea'],
         }),
       );
 
       if (response.statusCode == 204 || response.statusCode == 200) {
-        debugPrint('Subscribed to mob_hp_updates');
+        debugPrint('Subscribed to mob_hp_updates_sea');
         _isConnected = true;
       } else {
-        debugPrint('Subscription failed: ${response.statusCode} ${response.body}');
+        debugPrint(
+          'Subscription failed: ${response.statusCode} ${response.body}',
+        );
         // Fallback: try subscribing to the collection directly
         final fallbackResponse = await http.post(
           Uri.parse('$_baseUrl/realtime'),
@@ -349,11 +376,14 @@ class BPTimerService extends ChangeNotifier {
             'subscriptions': ['mob_channel_status/*'],
           }),
         );
-        if (fallbackResponse.statusCode == 204 || fallbackResponse.statusCode == 200) {
+        if (fallbackResponse.statusCode == 204 ||
+            fallbackResponse.statusCode == 200) {
           debugPrint('Subscribed to mob_channel_status/*');
           _isConnected = true;
         } else {
-          debugPrint('Fallback subscription also failed: ${fallbackResponse.statusCode}');
+          debugPrint(
+            'Fallback subscription also failed: ${fallbackResponse.statusCode}',
+          );
           _isConnected = true; // Still connected to SSE, just no subscription
         }
       }
@@ -388,14 +418,16 @@ class BPTimerService extends ChangeNotifier {
           statuses[existingIndex].lastUpdate = DateTime.now();
         } else {
           // Create new channel status entry
-          statuses.add(MobChannelStatus(
-            id: '${mobId}_ch$channelNumber',
-            mobId: mobId,
-            channelNumber: channelNumber,
-            lastHp: hp,
-            lastUpdate: DateTime.now(),
-            region: _region,
-          ));
+          statuses.add(
+            MobChannelStatus(
+              id: '${mobId}_ch$channelNumber',
+              mobId: mobId,
+              channelNumber: channelNumber,
+              lastHp: hp,
+              lastUpdate: DateTime.now(),
+              region: _region,
+            ),
+          );
         }
         changed = true;
       }
