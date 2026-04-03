@@ -1,4 +1,4 @@
-package com.bluemeter.bluemeter_mobile
+package com.bluemetersea.bluemetersea_mobile
 
 import java.nio.ByteBuffer
 

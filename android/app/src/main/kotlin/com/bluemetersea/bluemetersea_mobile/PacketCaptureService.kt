@@ -1,4 +1,4 @@
-package com.bluemeter.bluemeter_mobile
+package com.bluemetersea.bluemetersea_mobile
 
 import android.content.Intent
 import android.net.VpnService
@@ -25,7 +25,6 @@ class PacketCaptureService : VpnService() {
     private var isRunning = false
 
     private val allowedGamePackages = listOf(
-        "com.bpsr.apj",
         "sea.haoplay.game.gp.bpsr"
     )
 
@@ -113,11 +112,11 @@ class PacketCaptureService : VpnService() {
                 val closedSession = source.removePrefix("CLOSE:")
                 if (closedSession == activeGameSession) {
                     activeGameSession = null
-                    Log.i("BlueMeter", "Active game session closed: $closedSession")
+                    Log.i("bluemetersea", "Active game session closed: $closedSession")
                 }
                 if (closedSession == port5003Session) {
                     port5003Session = null
-                    Log.i("BlueMeter", "Port 5003 session closed: $closedSession")
+                    Log.i("bluemetersea", "Port 5003 session closed: $closedSession")
                 }
                 gameSessionCandidates.remove(closedSession)
                 validGameSessions.remove(closedSession)
@@ -142,7 +141,7 @@ class PacketCaptureService : VpnService() {
                             dataBuffer.reset()
                         }
                     }
-                    Log.i("BlueMeter", "Game session candidate (from client handshake): $sessionKey (hasActive=${activeGameSession != null})")
+                    Log.i("bluemetersea", "Game session candidate (from client handshake): $sessionKey (hasActive=${activeGameSession != null})")
                 }
                 return@TcpProxy
             }
@@ -166,7 +165,7 @@ class PacketCaptureService : VpnService() {
                         // Send a reset marker so Dart clears its reassembly buffer
                         // Marker: 4 bytes 0xFFFFFFFF (invalid packet size = reset signal)
                         upstreamBuffer.write(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
-                        Log.i("BlueMeter", "Port 5003 session changed: $source")
+                        Log.i("bluemetersea", "Port 5003 session changed: $source")
                     }
                     upstreamBuffer.write(data)
                     if (upstreamBuffer.size() > 200 * 1024) flushData()
@@ -185,7 +184,7 @@ class PacketCaptureService : VpnService() {
                     synchronized(bufferLock) {
                         dataBuffer.write(data)
                     }
-                    Log.i("BlueMeter", "Game session detected: $source (now active)")
+                    Log.i("bluemetersea", "Game session detected: $source (now active)")
                     return@TcpProxy
                 }
                 // Forward candidate data ONLY if there’s no active session
@@ -215,19 +214,19 @@ class PacketCaptureService : VpnService() {
                         dataBuffer.write(data)
                     }
                 }
-                Log.i("BlueMeter", "Game session candidate: $source (hasActive=${activeGameSession != null})")
+                Log.i("bluemetersea", "Game session candidate: $source (hasActive=${activeGameSession != null})")
                 return@TcpProxy
             }
 
             // ── 6) Unknown session → log first data for diagnosis ──
             if (data.size >= 6) {
                 val hex = toHexPrefix(data, 24)
-                Log.i("BlueMeterDiag", "session=$source len=${data.size} first=$hex")
+                Log.i("bluemeterseaDiag", "session=$source len=${data.size} first=$hex")
             }
         }
 
         val builder = Builder()
-        builder.setSession("BlueMeter")
+        builder.setSession("bluemetersea")
         builder.addAddress("10.0.0.2", 24)
         builder.addRoute("0.0.0.0", 0)
         builder.setMtu(1500)
@@ -238,19 +237,19 @@ class PacketCaptureService : VpnService() {
                 builder.addAllowedApplication(pkg)
                 addedApps++
             } catch (e: Exception) {
-                Log.w("BlueMeter", "Could not restrict VPN to game app: ${e.message}")
+                Log.w("bluemetersea", "Could not restrict VPN to game app: ${e.message}")
             }
         }
 
         if (addedApps == 0) {
-            Log.w("BlueMeter", "No allowed game package matched. VPN may capture nothing.")
+            Log.w("bluemetersea", "No allowed game package matched. VPN may capture nothing.")
         }
         
         try {
             mInterface = builder.establish()
             executor.submit { runCaptureLoop() }
         } catch (e: Exception) {
-            Log.e("BlueMeter", "Failed to establish VPN", e)
+            Log.e("bluemetersea", "Failed to establish VPN", e)
             stopSelf()
         }
     }
@@ -262,7 +261,7 @@ class PacketCaptureService : VpnService() {
         try {
             mInterface?.close()
         } catch (e: Exception) {
-            Log.e("BlueMeter", "Error closing VPN interface", e)
+            Log.e("bluemetersea", "Error closing VPN interface", e)
         }
         mInterface = null
         udpChannels.values.forEach { try { it.close() } catch (e: Exception) {} }
@@ -272,15 +271,15 @@ class PacketCaptureService : VpnService() {
     private fun flushData() {
         synchronized(bufferLock) {
             if (dataBuffer.size() > 0) {
-                val intent = Intent("com.bluemeter.mobile.PACKET_DATA")
+                val intent = Intent("com.bluemetersea.mobile.PACKET_DATA")
                 intent.putExtra("data", dataBuffer.toByteArray())
                 intent.setPackage(packageName)
                 sendBroadcast(intent)
                 dataBuffer.reset()
             }
             if (upstreamBuffer.size() > 0) {
-                Log.d("BlueMeter", "Flushing upstream: ${upstreamBuffer.size()} bytes")
-                val intent = Intent("com.bluemeter.mobile.UPSTREAM_DATA")
+                Log.d("bluemetersea", "Flushing upstream: ${upstreamBuffer.size()} bytes")
+                val intent = Intent("com.bluemetersea.mobile.UPSTREAM_DATA")
                 intent.putExtra("data", upstreamBuffer.toByteArray())
                 intent.setPackage(packageName)
                 sendBroadcast(intent)
@@ -325,7 +324,7 @@ class PacketCaptureService : VpnService() {
                         inputQueue.add(packetData)
                     }
                 } catch (e: Exception) {
-                    if (isRunning) Log.e("BlueMeter", "Error reading TUN", e)
+                    if (isRunning) Log.e("bluemetersea", "Error reading TUN", e)
                     break
                 }
             }
@@ -372,7 +371,7 @@ class PacketCaptureService : VpnService() {
                 Thread.sleep(1) // Reduced sleep time for responsiveness
                 
             } catch (e: Exception) {
-                Log.e("BlueMeter", "Capture loop error", e)
+                Log.e("bluemetersea", "Capture loop error", e)
             }
         }
         
@@ -393,7 +392,7 @@ class PacketCaptureService : VpnService() {
                 channel.connect(InetSocketAddress(packet.destIp, packet.destPort))
                 udpChannels[key] = channel
             } catch (e: IOException) {
-                Log.e("BlueMeter", "UDP Error", e)
+                Log.e("bluemetersea", "UDP Error", e)
                 return
             }
         }
@@ -406,7 +405,7 @@ class PacketCaptureService : VpnService() {
                 channel.write(payload)
             }
         } catch (e: IOException) {
-            Log.e("BlueMeter", "UDP Write Error", e)
+            Log.e("bluemetersea", "UDP Write Error", e)
         }
     }
     
@@ -472,7 +471,7 @@ class PacketCaptureService : VpnService() {
                     outputQueue.add(outBuffer)
                 }
             } catch (e: IOException) {
-                // Log.e("BlueMeter", "UDP Read Error", e)
+                // Log.e("bluemetersea", "UDP Read Error", e)
             }
         }
         recycleBuffer(buffer)

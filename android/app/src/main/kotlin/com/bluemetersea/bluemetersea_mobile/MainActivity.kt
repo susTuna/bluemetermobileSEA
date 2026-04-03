@@ -1,4 +1,4 @@
-package com.bluemeter.bluemeter_mobile
+package com.bluemetersea.bluemetersea_mobile
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -13,15 +13,15 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.bluemeter.mobile/vpn"
-    private val EVENT_CHANNEL = "com.bluemeter.mobile/packet_stream"
-    private val UPSTREAM_EVENT_CHANNEL = "com.bluemeter.mobile/upstream_stream"
+    private val CHANNEL = "com.bluemetersea.mobile/vpn"
+    private val EVENT_CHANNEL = "com.bluemetersea.mobile/packet_stream"
+    private val UPSTREAM_EVENT_CHANNEL = "com.bluemetersea.mobile/upstream_stream"
     private var eventSink: EventChannel.EventSink? = null
     private var upstreamEventSink: EventChannel.EventSink? = null
 
     private val packetReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.bluemeter.mobile.PACKET_DATA") {
+            if (intent?.action == "com.bluemetersea.mobile.PACKET_DATA") {
                 val data = intent.getByteArrayExtra("data")
                 if (data != null) {
                     eventSink?.success(data)
@@ -32,7 +32,7 @@ class MainActivity: FlutterActivity() {
 
     private val upstreamReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.bluemeter.mobile.UPSTREAM_DATA") {
+            if (intent?.action == "com.bluemetersea.mobile.UPSTREAM_DATA") {
                 val data = intent.getByteArrayExtra("data")
                 if (data != null) {
                     upstreamEventSink?.success(data)
@@ -68,7 +68,7 @@ class MainActivity: FlutterActivity() {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     eventSink = events
-                    val filter = IntentFilter("com.bluemeter.mobile.PACKET_DATA")
+                    val filter = IntentFilter("com.bluemetersea.mobile.PACKET_DATA")
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         registerReceiver(packetReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
                     } else {
@@ -87,7 +87,7 @@ class MainActivity: FlutterActivity() {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     upstreamEventSink = events
-                    val filter = IntentFilter("com.bluemeter.mobile.UPSTREAM_DATA")
+                    val filter = IntentFilter("com.bluemetersea.mobile.UPSTREAM_DATA")
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         registerReceiver(upstreamReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
                     } else {

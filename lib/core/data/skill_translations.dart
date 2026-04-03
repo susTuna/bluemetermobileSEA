@@ -1,5 +1,5 @@
 /// Traductions des noms de skills (chinois → anglais)
-/// Basé sur BlueMeter.WPF/Data/skills_en.json
+/// Basé sur bluemetersea.WPF/Data/skills_en.json
 const Map<String, String> skillTranslations = {
   "一闪": "Flash Strike",
   "万众瞩目": "Center Stage",

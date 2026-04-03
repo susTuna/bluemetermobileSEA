@@ -1,4 +1,4 @@
-package com.bluemeter.bluemeter_mobile
+package com.bluemetersea.bluemetersea_mobile
 
 import android.net.VpnService
 import android.util.Log
@@ -44,9 +44,9 @@ class TcpProxy(
                     session.state = SessionState.SYN_RECEIVED
                     session.clientSeq = packet.seqNum + 1
                     session.mySeq = 1000 // Random start
-                    Log.i("BlueMeter", "TCP SYN → new session: $key")
+                    Log.i("bluemetersea", "TCP SYN → new session: $key")
                 } catch (e: IOException) {
-                    Log.e("BlueMeter", "TCP SYN → connect failed: $key — ${e.message}")
+                    Log.e("bluemetersea", "TCP SYN → connect failed: $key — ${e.message}")
                     sessions.remove(key)
                     return
                 }
@@ -57,7 +57,7 @@ class TcpProxy(
                 try { session.channel?.close() } catch (_: Exception) {}
                 onDataReceived("CLOSE:$key", ByteArray(0))
                 sessions.remove(key)
-                Log.i("BlueMeter", "TCP RST: $key")
+                Log.i("bluemetersea", "TCP RST: $key")
                 return
             }
             if (packet.flags and Packet.TCP_FIN != 0) {

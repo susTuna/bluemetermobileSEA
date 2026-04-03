@@ -17,12 +17,8 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'bluemeter.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-    );
+    String path = join(await getDatabasesPath(), 'bluemetersea.db');
+    return await openDatabase(path, version: 1, onCreate: _onCreate);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -45,7 +41,7 @@ class DatabaseService {
 
   Future<void> savePlayer(PlayerInfo player) async {
     final db = await database;
-    
+
     await db.transaction((txn) async {
       // Check if player exists
       final List<Map<String, dynamic>> maps = await txn.query(
@@ -56,22 +52,19 @@ class DatabaseService {
 
       if (maps.isEmpty) {
         // Insert new
-        await txn.insert(
-          'players',
-          {
-            'uid': player.uid.toString(),
-            'name': player.name,
-            'professionId': player.professionId,
-            'combatPower': player.combatPower,
-            'level': player.level,
-            'rankLevel': player.rankLevel,
-            'critical': player.critical,
-            'lucky': player.lucky,
-            'maxHp': player.maxHp?.toString(),
-            'hp': player.hp?.toString(),
-            'last_seen': DateTime.now().millisecondsSinceEpoch,
-          },
-        );
+        await txn.insert('players', {
+          'uid': player.uid.toString(),
+          'name': player.name,
+          'professionId': player.professionId,
+          'combatPower': player.combatPower,
+          'level': player.level,
+          'rankLevel': player.rankLevel,
+          'critical': player.critical,
+          'lucky': player.lucky,
+          'maxHp': player.maxHp?.toString(),
+          'hp': player.hp?.toString(),
+          'last_seen': DateTime.now().millisecondsSinceEpoch,
+        });
       } else {
         // Update existing, only non-null fields
         final updateValues = <String, dynamic>{
@@ -79,18 +72,25 @@ class DatabaseService {
         };
 
         if (player.name != null) updateValues['name'] = player.name;
-        if (player.professionId != null && player.professionId != 0) updateValues['professionId'] = player.professionId;
-        if (player.combatPower != null && player.combatPower != 0) updateValues['combatPower'] = player.combatPower;
-        if (player.level != null && player.level != 0) updateValues['level'] = player.level;
-        if (player.rankLevel != null && player.rankLevel != 0) updateValues['rankLevel'] = player.rankLevel;
-        if (player.critical != null && player.critical != 0) updateValues['critical'] = player.critical;
-        if (player.lucky != null && player.lucky != 0) updateValues['lucky'] = player.lucky;
-        if (player.maxHp != null && player.maxHp != Int64.ZERO) updateValues['maxHp'] = player.maxHp.toString();
-        // Hp changes too often, maybe we don't need to persist it strictly or maybe we do? 
+        if (player.professionId != null && player.professionId != 0)
+          updateValues['professionId'] = player.professionId;
+        if (player.combatPower != null && player.combatPower != 0)
+          updateValues['combatPower'] = player.combatPower;
+        if (player.level != null && player.level != 0)
+          updateValues['level'] = player.level;
+        if (player.rankLevel != null && player.rankLevel != 0)
+          updateValues['rankLevel'] = player.rankLevel;
+        if (player.critical != null && player.critical != 0)
+          updateValues['critical'] = player.critical;
+        if (player.lucky != null && player.lucky != 0)
+          updateValues['lucky'] = player.lucky;
+        if (player.maxHp != null && player.maxHp != Int64.ZERO)
+          updateValues['maxHp'] = player.maxHp.toString();
+        // Hp changes too often, maybe we don't need to persist it strictly or maybe we do?
         // User asked to persist player info. HP is transient. But let's keep it if we have it?
-        // Actually, if we restart app, HP is likely 0 or full. 
+        // Actually, if we restart app, HP is likely 0 or full.
         // But updating DB for every HP change (damage packet) is VERY expensive.
-        
+
         await txn.update(
           'players',
           updateValues,
@@ -101,7 +101,7 @@ class DatabaseService {
 
       // Cleanup
       await txn.rawDelete(
-        'DELETE FROM players WHERE uid NOT IN (SELECT uid FROM players ORDER BY last_seen DESC LIMIT 100)'
+        'DELETE FROM players WHERE uid NOT IN (SELECT uid FROM players ORDER BY last_seen DESC LIMIT 100)',
       );
     });
   }
@@ -126,7 +126,9 @@ class DatabaseService {
       rankLevel: map['rankLevel'] as int?,
       critical: map['critical'] as int?,
       lucky: map['lucky'] as int?,
-      maxHp: map['maxHp'] != null ? Int64.parseInt(map['maxHp'] as String) : null,
+      maxHp: map['maxHp'] != null
+          ? Int64.parseInt(map['maxHp'] as String)
+          : null,
       hp: map['hp'] != null ? Int64.parseInt(map['hp'] as String) : null,
     );
   }

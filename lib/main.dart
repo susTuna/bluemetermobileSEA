@@ -3,13 +3,13 @@ import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui';
 
-import 'package:bluemeter_mobile/core/services/translation_service.dart';
-import 'package:bluemeter_mobile/views/dps_view.dart';
-import 'package:bluemeter_mobile/views/nearby_view.dart';
-import 'package:bluemeter_mobile/views/tools_view.dart';
-import 'package:bluemeter_mobile/views/hunt_view.dart';
-import 'package:bluemeter_mobile/views/settings_view.dart';
-import 'package:bluemeter_mobile/widgets/player_detail_card.dart';
+import 'package:bluemetersea_mobile/core/services/translation_service.dart';
+import 'package:bluemetersea_mobile/views/dps_view.dart';
+import 'package:bluemetersea_mobile/views/nearby_view.dart';
+import 'package:bluemetersea_mobile/views/tools_view.dart';
+import 'package:bluemetersea_mobile/views/hunt_view.dart';
+import 'package:bluemetersea_mobile/views/settings_view.dart';
+import 'package:bluemetersea_mobile/widgets/player_detail_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -32,12 +32,12 @@ void main() async {
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
-  ]);  
+  ]);
   await MonsterNameService().load();
-  
+
   // Pre-load known mobs for HP reporting (non-blocking)
   BPTimerService().ensureMobsLoaded();
-  
+
   runApp(
     ChangeNotifierProvider(
       create: (context) => DataStorage(),
@@ -52,7 +52,10 @@ void overlayMain() {
   runApp(
     ChangeNotifierProvider(
       create: (context) => DataStorage(),
-      child: const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayWidget()),
+      child: const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: OverlayWidget(),
+      ),
     ),
   );
 }
@@ -69,8 +72,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   List<Map<String, dynamic>> _players = [];
   int _combatTime = 0;
   int _lineId = 0;
-  String? _selectedPlayerUid; 
-  
+  String? _selectedPlayerUid;
+
   // Navigation State
   int _mainTabIndex = 0; // 0=DPS, 1=Nearby, 2=Tools, 3=Hunt, 4=Settings
   int _dpsTabIndex = 0; // 0=DPS(sword), 1=Taken(shield), 2=Heal(cross)
@@ -78,7 +81,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   // Track window position
   double _windowX = 0;
   double _windowY = 0;
-  
+
   // Store original window size before showing detail
   double _savedWidth = 600;
   double _savedHeight = 400;
@@ -121,12 +124,12 @@ class _OverlayWidgetState extends State<OverlayWidget> {
           // Update selectedPlayerUid when it's explicitly sent
           if (event.containsKey('selectedPlayerUid')) {
             final newUid = event['selectedPlayerUid'] as String?;
-            
+
             // If switching to detail view, save current window size
             if (newUid != null && _selectedPlayerUid == null) {
               _saveCurrentWindowSize();
             }
-            
+
             _selectedPlayerUid = newUid;
           }
 
@@ -138,66 +141,80 @@ class _OverlayWidgetState extends State<OverlayWidget> {
 
           // Sync DataStorage for NearbyView
           if (mounted) {
-             final storage = Provider.of<DataStorage>(context, listen: false);
-             
-             if (event.containsKey('myUid')) {
-               final myUidStr = event['myUid'] as String?;
-               if (myUidStr != null) {
-                  storage.currentPlayerUuid = Int64.parseInt(myUidStr);
-               }
-             }
+            final storage = Provider.of<DataStorage>(context, listen: false);
 
-             if (event.containsKey('myPos')) {
-               final myPos = event['myPos'] as Map?;
-               if (myPos != null) {
-                 final convertedPos = myPos.map((key, value) => 
-                    MapEntry(key.toString(), (value as num).toDouble()));
-                 
-                 storage.setPlayerPosition(
-                   storage.currentPlayerUuid, 
-                   convertedPos,
-                 );
-               }
-             }
+            if (event.containsKey('myUid')) {
+              final myUidStr = event['myUid'] as String?;
+              if (myUidStr != null) {
+                storage.currentPlayerUuid = Int64.parseInt(myUidStr);
+              }
+            }
 
-             if (event.containsKey('monsters')) {
-               final monsters = event['monsters'] as List?;
-               if (monsters != null) {
-                 final incomingUids = <Int64>{};
+            if (event.containsKey('myPos')) {
+              final myPos = event['myPos'] as Map?;
+              if (myPos != null) {
+                final convertedPos = myPos.map(
+                  (key, value) =>
+                      MapEntry(key.toString(), (value as num).toDouble()),
+                );
 
-                 for (var m in monsters) {
-                   final map = m as Map;
-                   final uid = Int64.parseInt(map['uid'] as String);
-                   incomingUids.add(uid);
+                storage.setPlayerPosition(
+                  storage.currentPlayerUuid,
+                  convertedPos,
+                );
+              }
+            }
 
-                   // Allow overlay to sync with main app truth, ignoring local graveyard
-                   storage.ensureMonster(uid, forceRespawn: true);
-                   
-                   if (map['templateId'] != null) storage.setMonsterTemplateId(uid, map['templateId'] as int);
-                   if (map['name'] != null) storage.setMonsterName(uid, map['name'] as String);
-                   if (map['level'] != null) storage.setMonsterLevel(uid, map['level'] as int);
-                   if (map['hp'] != null) storage.setMonsterHp(uid, Int64.parseInt(map['hp'] as String));
-                   if (map['maxHp'] != null) storage.setMonsterMaxHp(uid, Int64.parseInt(map['maxHp'] as String));
-                   if (map['isDead'] != null) storage.setMonsterIsDead(uid, map['isDead'] as bool);
-                   
-                   if (map['pos_x'] != null) {
-                      storage.setMonsterPosition(uid, {
-                        'x': (map['pos_x'] as num).toDouble(),
-                        'y': (map['pos_y'] as num).toDouble(),
-                        'z': (map['pos_z'] as num).toDouble(),
-                      });
-                   }
-                 }
+            if (event.containsKey('monsters')) {
+              final monsters = event['monsters'] as List?;
+              if (monsters != null) {
+                final incomingUids = <Int64>{};
 
-                 // Remove stale monsters that are no longer in the list sent by Main Isolate
-                 final currentUids = storage.monsterInfoDatas.keys.toList();
-                 for (var uid in currentUids) {
-                    if (!incomingUids.contains(uid)) {
-                       storage.removeMonster(uid);
-                    }
-                 }
-               }
-             }
+                for (var m in monsters) {
+                  final map = m as Map;
+                  final uid = Int64.parseInt(map['uid'] as String);
+                  incomingUids.add(uid);
+
+                  // Allow overlay to sync with main app truth, ignoring local graveyard
+                  storage.ensureMonster(uid, forceRespawn: true);
+
+                  if (map['templateId'] != null)
+                    storage.setMonsterTemplateId(uid, map['templateId'] as int);
+                  if (map['name'] != null)
+                    storage.setMonsterName(uid, map['name'] as String);
+                  if (map['level'] != null)
+                    storage.setMonsterLevel(uid, map['level'] as int);
+                  if (map['hp'] != null)
+                    storage.setMonsterHp(
+                      uid,
+                      Int64.parseInt(map['hp'] as String),
+                    );
+                  if (map['maxHp'] != null)
+                    storage.setMonsterMaxHp(
+                      uid,
+                      Int64.parseInt(map['maxHp'] as String),
+                    );
+                  if (map['isDead'] != null)
+                    storage.setMonsterIsDead(uid, map['isDead'] as bool);
+
+                  if (map['pos_x'] != null) {
+                    storage.setMonsterPosition(uid, {
+                      'x': (map['pos_x'] as num).toDouble(),
+                      'y': (map['pos_y'] as num).toDouble(),
+                      'z': (map['pos_z'] as num).toDouble(),
+                    });
+                  }
+                }
+
+                // Remove stale monsters that are no longer in the list sent by Main Isolate
+                final currentUids = storage.monsterInfoDatas.keys.toList();
+                for (var uid in currentUids) {
+                  if (!incomingUids.contains(uid)) {
+                    storage.removeMonster(uid);
+                  }
+                }
+              }
+            }
           }
         });
       }
@@ -220,9 +237,15 @@ class _OverlayWidgetState extends State<OverlayWidget> {
         if (s.isMinimized) {
           await FlutterOverlayWindow.resizeOverlay(135, 30, false);
         } else {
-          await FlutterOverlayWindow.resizeOverlay(s.fullWidth.toInt(), s.fullHeight.toInt(), false);
+          await FlutterOverlayWindow.resizeOverlay(
+            s.fullWidth.toInt(),
+            s.fullHeight.toInt(),
+            false,
+          );
         }
-        await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
+        await FlutterOverlayWindow.moveOverlay(
+          OverlayPosition(_windowX, _windowY),
+        );
       } catch (e) {
         _logger.error('Error applying saved overlay state', error: e);
       }
@@ -248,7 +271,11 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   void _saveCurrentWindowSize() {
     _savedWidth = _settings.fullWidth;
     _savedHeight = _settings.fullHeight;
-    _logger.log("Saved window size: $_savedWidth" "x" "$_savedHeight");
+    _logger.log(
+      "Saved window size: $_savedWidth"
+      "x"
+      "$_savedHeight",
+    );
   }
 
   Future<void> _resizeForDetail() async {
@@ -267,7 +294,11 @@ class _OverlayWidgetState extends State<OverlayWidget> {
         _savedHeight.toInt(),
         false,
       );
-      _logger.log("Restored window size: $_savedWidth" "x" "$_savedHeight");
+      _logger.log(
+        "Restored window size: $_savedWidth"
+        "x"
+        "$_savedHeight",
+      );
     } catch (e) {
       _logger.error("Error restoring window size", error: e);
     }
@@ -320,7 +351,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       });
       return _buildPlayerDetail();
     }
-    
+
     // Sinon afficher la liste normale
     if (_settings.isMinimized) {
       return _buildMinimized();
@@ -331,7 +362,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
   BoxDecoration get _windowDecoration {
     final theme = _settings.theme;
     return BoxDecoration(
-      color: theme.backgroundColor.withValues(alpha: _settings.backgroundOpacity),
+      color: theme.backgroundColor.withValues(
+        alpha: _settings.backgroundOpacity,
+      ),
       borderRadius: BorderRadius.circular(0),
       border: Border(
         left: BorderSide(
@@ -351,11 +384,13 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     String totalKey = 'total';
     IconData headerIcon = Icons.flash_on;
 
-    if (tabIndex == 1) { // Taken (matches TabBarView order)
+    if (tabIndex == 1) {
+      // Taken (matches TabBarView order)
       rateKey = 'takenDps';
       totalKey = 'totalTaken';
       headerIcon = Icons.shield;
-    } else if (tabIndex == 2) { // Heal
+    } else if (tabIndex == 2) {
+      // Heal
       rateKey = 'hps';
       totalKey = 'totalHeal';
       headerIcon = Icons.local_hospital;
@@ -386,22 +421,20 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       color: Colors.transparent,
       child: GestureDetector(
         onPanStart: (details) {
-             _lastGlobalX = details.globalPosition.dx;
-             _lastGlobalY = details.globalPosition.dy;
-             _isDragging = true;
+          _lastGlobalX = details.globalPosition.dx;
+          _lastGlobalY = details.globalPosition.dy;
+          _isDragging = true;
         },
         onPanUpdate: (details) {
-             if (!_isDragging) return;
-             final dx = details.globalPosition.dx - _lastGlobalX;
-             final dy = details.globalPosition.dy - _lastGlobalY;
-             _windowX += dx;
-             _windowY += dy;
-             _lastGlobalX = details.globalPosition.dx;
-             _lastGlobalY = details.globalPosition.dy;
+          if (!_isDragging) return;
+          final dx = details.globalPosition.dx - _lastGlobalX;
+          final dy = details.globalPosition.dy - _lastGlobalY;
+          _windowX += dx;
+          _windowY += dy;
+          _lastGlobalX = details.globalPosition.dx;
+          _lastGlobalY = details.globalPosition.dy;
 
-             FlutterOverlayWindow.moveOverlay(
-               OverlayPosition(_windowX, _windowY),
-             );
+          FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
         },
         onPanEnd: (details) {
           _isDragging = false;
@@ -412,17 +445,19 @@ class _OverlayWidgetState extends State<OverlayWidget> {
             _settings.isMinimized = false;
           });
           _settings.saveMinimizedState();
-          
+
           // Restore full position
           _windowX = _settings.fullX;
           _windowY = _settings.fullY;
-          
+
           await FlutterOverlayWindow.resizeOverlay(
             _settings.fullWidth.toInt(),
             _settings.fullHeight.toInt(),
             false,
           );
-          await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
+          await FlutterOverlayWindow.moveOverlay(
+            OverlayPosition(_windowX, _windowY),
+          );
         },
         child: Container(
           decoration: _windowDecoration,
@@ -434,7 +469,11 @@ class _OverlayWidgetState extends State<OverlayWidget> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(headerIcon, size: 16, color: _settings.theme.accentColor),
+                  Icon(
+                    headerIcon,
+                    size: 16,
+                    color: _settings.theme.accentColor,
+                  ),
                   const SizedBox(width: 4),
                   if (myRank > 0)
                     Text(
@@ -461,12 +500,18 @@ class _OverlayWidgetState extends State<OverlayWidget> {
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () async {
-                   final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
-                   if (sendPort != null) {
-                     sendPort.send("RESET");
-                   }
+                  final sendPort = IsolateNameServer.lookupPortByName(
+                    'overlay_communication_port',
+                  );
+                  if (sendPort != null) {
+                    sendPort.send("RESET");
+                  }
                 },
-                child: Icon(Icons.refresh, size: 16, color: _settings.theme.secondaryTextColor),
+                child: Icon(
+                  Icons.refresh,
+                  size: 16,
+                  color: _settings.theme.secondaryTextColor,
+                ),
               ),
             ],
           ),
@@ -487,7 +532,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                 // Vertical Side Menu
                 Container(
                   width: 26,
-                  color: _settings.theme.sidebarColor.withValues(alpha: _settings.backgroundOpacity * 0.75),
+                  color: _settings.theme.sidebarColor.withValues(
+                    alpha: _settings.backgroundOpacity * 0.75,
+                  ),
                   child: Column(
                     children: [
                       const SizedBox(height: 4),
@@ -523,7 +570,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                           _windowY += dy;
                           _lastGlobalX = details.globalPosition.dx;
                           _lastGlobalY = details.globalPosition.dy;
-                          
+
                           FlutterOverlayWindow.moveOverlay(
                             OverlayPosition(_windowX, _windowY),
                           );
@@ -537,7 +584,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                           color: Colors.transparent, // Hit test
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Push items to edges
+                            mainAxisAlignment: MainAxisAlignment
+                                .spaceBetween, // Push items to edges
                             children: [
                               // Line number (Left aligned in this area)
                               Text(
@@ -546,7 +594,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                   color: _settings.theme.textColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  shadows: const [Shadow(blurRadius: 2, color: Colors.black)],
+                                  shadows: const [
+                                    Shadow(blurRadius: 2, color: Colors.black),
+                                  ],
                                 ),
                               ),
                               // Window Actions (Right aligned)
@@ -559,29 +609,52 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                                         _settings.isMinimized = true;
                                       });
                                       _settings.saveMinimizedState();
-                                      
+
                                       // Restore mini position
                                       _windowX = _settings.miniX;
                                       _windowY = _settings.miniY;
-                                      
-                                      await FlutterOverlayWindow.resizeOverlay(135, 30, false);
-                                      await FlutterOverlayWindow.moveOverlay(OverlayPosition(_windowX, _windowY));
+
+                                      await FlutterOverlayWindow.resizeOverlay(
+                                        135,
+                                        30,
+                                        false,
+                                      );
+                                      await FlutterOverlayWindow.moveOverlay(
+                                        OverlayPosition(_windowX, _windowY),
+                                      );
                                     },
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                                      child: Icon(Icons.remove, size: 14, color: _settings.theme.secondaryTextColor),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 2,
+                                      ),
+                                      child: Icon(
+                                        Icons.remove,
+                                        size: 14,
+                                        color:
+                                            _settings.theme.secondaryTextColor,
+                                      ),
                                     ),
                                   ),
                                   GestureDetector(
                                     onTap: () async {
-                                       final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
-                                       if (sendPort != null) {
-                                         sendPort.send("RESET");
-                                       }
+                                      final sendPort =
+                                          IsolateNameServer.lookupPortByName(
+                                            'overlay_communication_port',
+                                          );
+                                      if (sendPort != null) {
+                                        sendPort.send("RESET");
+                                      }
                                     },
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                                      child: Icon(Icons.refresh, size: 14, color: _settings.theme.secondaryTextColor),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 2,
+                                      ),
+                                      child: Icon(
+                                        Icons.refresh,
+                                        size: 14,
+                                        color:
+                                            _settings.theme.secondaryTextColor,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -596,10 +669,13 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                           index: _mainTabIndex,
                           children: [
                             DpsView(
-                              players: _players, 
+                              players: _players,
                               combatTime: _combatTime,
                               onSelectPlayer: (uid) {
-                                final sendPort = IsolateNameServer.lookupPortByName('overlay_communication_port');
+                                final sendPort =
+                                    IsolateNameServer.lookupPortByName(
+                                      'overlay_communication_port',
+                                    );
                                 if (sendPort != null) {
                                   sendPort.send({'selectPlayer': uid});
                                 }
@@ -615,7 +691,8 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                               settings: _settings,
                               onThemeChanged: () => setState(() {}),
                               onOpacityChanged: () => setState(() {}),
-                              onAnchorSelected: (anchor) => _applyAnchor(anchor),
+                              onAnchorSelected: (anchor) =>
+                                  _applyAnchor(anchor),
                             ),
                           ],
                         ),
@@ -637,11 +714,13 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                   _dragStartTouchPosition = details.globalPosition;
                 },
                 onPanUpdate: (details) {
-                  if (_resizeStartWindowSize == null || _dragStartTouchPosition == null) return;
+                  if (_resizeStartWindowSize == null ||
+                      _dragStartTouchPosition == null)
+                    return;
 
                   final currentTouch = details.globalPosition;
                   final diff = currentTouch - _dragStartTouchPosition!;
-                  
+
                   // Calculate new size in logical pixels
                   double newWidth = _resizeStartWindowSize!.width + diff.dx;
                   double newHeight = _resizeStartWindowSize!.height + diff.dy;
@@ -669,7 +748,11 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                   color: Colors.transparent,
                   alignment: Alignment.bottomRight,
                   padding: const EdgeInsets.all(4),
-                  child: const Icon(Icons.south_east, size: 14, color: Colors.white24),
+                  child: const Icon(
+                    Icons.south_east,
+                    size: 14,
+                    color: Colors.white24,
+                  ),
                 ),
               ),
             ),
@@ -691,7 +774,9 @@ class _OverlayWidgetState extends State<OverlayWidget> {
       child: Container(
         height: 26,
         width: 26,
-        color: isSelected ? theme.textColor.withValues(alpha: 0.1) : Colors.transparent,
+        color: isSelected
+            ? theme.textColor.withValues(alpha: 0.1)
+            : Colors.transparent,
         child: Icon(
           icon,
           color: isSelected ? theme.accentColor : theme.secondaryTextColor,
@@ -726,12 +811,12 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     if (playerData.isEmpty) return const SizedBox.shrink();
 
     final uid = Int64.parseInt(_selectedPlayerUid!);
-    
+
     // Use the already calculated DPS/HPS values from playerData
     final dpsValue = (playerData['dps'] as num?)?.toDouble() ?? 0.0;
     final hpsValue = (playerData['hps'] as num?)?.toDouble() ?? 0.0;
     final takenDpsValue = (playerData['takenDps'] as num?)?.toDouble() ?? 0.0;
-    
+
     final dpsData = DpsData(uid: uid)
       ..totalAttackDamage = Int64(playerData['total'] ?? 0)
       ..totalHeal = Int64(playerData['totalHeal'] ?? 0)
@@ -750,7 +835,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
           ..damage = sliceData['d'] ?? 0
           ..heal = sliceData['h'] ?? 0
           ..taken = sliceData['t'] ?? 0;
-        
+
         if (sliceData.containsKey('sd')) {
           (sliceData['sd'] as Map<String, dynamic>).forEach((k, v) {
             slice.skillDamage[k] = v as int;
@@ -781,13 +866,19 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     for (var targetMap in targetsList) {
       final targetUid = Int64.parseInt(targetMap['uid'] as String);
       final targetName = targetMap['name'] as String?;
-      final breakdown = TargetBreakdown(targetUid: targetUid, name: targetName != null && targetName.isNotEmpty ? targetName : null)
-        ..totalDamage = Int64(targetMap['totalDamage'] ?? 0)
-        ..totalHeal = Int64(targetMap['totalHeal'] ?? 0)
-        ..hitCount = targetMap['hitCount'] ?? 0
-        ..critHitCount = targetMap['critHitCount'] ?? 0
-        ..luckyHitCount = targetMap['luckyHitCount'] ?? 0;
-      
+      final breakdown =
+          TargetBreakdown(
+              targetUid: targetUid,
+              name: targetName != null && targetName.isNotEmpty
+                  ? targetName
+                  : null,
+            )
+            ..totalDamage = Int64(targetMap['totalDamage'] ?? 0)
+            ..totalHeal = Int64(targetMap['totalHeal'] ?? 0)
+            ..hitCount = targetMap['hitCount'] ?? 0
+            ..critHitCount = targetMap['critHitCount'] ?? 0
+            ..luckyHitCount = targetMap['luckyHitCount'] ?? 0;
+
       final tSkills = targetMap['skills'] as List<dynamic>? ?? [];
       for (var ts in tSkills) {
         final sd = SkillData(skillId: ts['skillId'])
@@ -856,7 +947,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
             _windowY += dy;
             _lastGlobalX = details.globalPosition.dx;
             _lastGlobalY = details.globalPosition.dy;
-            
+
             FlutterOverlayWindow.moveOverlay(
               OverlayPosition(_windowX, _windowY),
             );
@@ -877,7 +968,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BlueMeterSEA Mobile',
+      title: 'bluemeterseaSEA Mobile',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
@@ -898,12 +989,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const platform = MethodChannel('com.bluemeter.mobile/vpn');
+  static const platform = MethodChannel('com.bluemetersea.mobile/vpn');
   static const eventChannel = EventChannel(
-    'com.bluemeter.mobile/packet_stream',
+    'com.bluemetersea.mobile/packet_stream',
   );
   static const upstreamEventChannel = EventChannel(
-    'com.bluemeter.mobile/upstream_stream',
+    'com.bluemetersea.mobile/upstream_stream',
   );
 
   final LoggerService _logger = LoggerService();
@@ -916,7 +1007,8 @@ class _HomePageState extends State<HomePage> {
   late PacketAnalyzerV2 _otherSessionAnalyzer;
   Timer? _overlayUpdateTimer;
   ReceivePort? _receivePort;
-  String? _selectedPlayerUid; // UID du joueur sélectionné pour affichage de la carte
+  String?
+  _selectedPlayerUid; // UID du joueur sélectionné pour affichage de la carte
   int _lastReportedLineId = 0; // Track line changes for throttle reset
 
   @override
@@ -924,11 +1016,16 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _packetAnalyzer = PacketAnalyzerV2(DataStorage(), tag: 'combat');
     _otherSessionAnalyzer = PacketAnalyzerV2(DataStorage(), tag: 'port5003');
-    
+
     // Setup communication port
     _receivePort = ReceivePort();
-    IsolateNameServer.removePortNameMapping('overlay_communication_port'); // Clean up old mapping if any
-    IsolateNameServer.registerPortWithName(_receivePort!.sendPort, 'overlay_communication_port');
+    IsolateNameServer.removePortNameMapping(
+      'overlay_communication_port',
+    ); // Clean up old mapping if any
+    IsolateNameServer.registerPortWithName(
+      _receivePort!.sendPort,
+      'overlay_communication_port',
+    );
     _receivePort!.listen((message) {
       // _logger.log("HomePage received message: $message");
       if (message == "RESET") {
@@ -950,7 +1047,9 @@ class _HomePageState extends State<HomePage> {
 
     // DataStorage().addListener(_updateOverlay);
     // Update overlay at 2 FPS (500ms) to prevent log spam and UI overload
-    _overlayUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+    _overlayUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      _,
+    ) {
       _updateOverlay();
     });
   }
@@ -996,125 +1095,149 @@ class _HomePageState extends State<HomePage> {
     storage.checkTimeout();
 
     final players = storage.fullDpsDatas.entries
-    .where((e) => e.value.totalAttackDamage.toInt() > 0 || e.value.totalHeal.toInt() > 0 || e.value.totalTakenDamage.toInt() > 0)
-    .map((e) {
-      final uid = e.key;
-      final dpsData = e.value;
-      // Use synchronous getter to avoid await overhead
-      final info = storage.getPlayerInfoSync(uid);
-      // _logger.log("UpdateOverlay - Processing UID: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.name}");
-      
-      // Convert skills to serializable format
-      final skillsList = dpsData.skills.entries.map((skillEntry) => {
-        'skillId': skillEntry.key,
-        'totalDamage': skillEntry.value.totalDamage.toInt(),
-        'totalHeal': skillEntry.value.totalHeal.toInt(),
-        'hitCount': skillEntry.value.hitCount,
-        'critHitCount': skillEntry.value.critHitCount,
-        'luckyHitCount': skillEntry.value.luckyHitCount,
-      }).toList();
-      
-      // Convert timeline to serializable format
-      // Only send timeline if this is the selected player to save bandwidth
-      Map<String, dynamic>? timelineMap;
-      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
-        timelineMap = {};
-        dpsData.timeline.forEach((key, value) {
-          timelineMap![key.toString()] = {
-            'd': value.damage,
-            'h': value.heal,
-            't': value.taken,
-            'sd': value.skillDamage,
-            'sh': value.skillHeal,
+        .where(
+          (e) =>
+              e.value.totalAttackDamage.toInt() > 0 ||
+              e.value.totalHeal.toInt() > 0 ||
+              e.value.totalTakenDamage.toInt() > 0,
+        )
+        .map((e) {
+          final uid = e.key;
+          final dpsData = e.value;
+          // Use synchronous getter to avoid await overhead
+          final info = storage.getPlayerInfoSync(uid);
+          // _logger.log("UpdateOverlay - Processing UID: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.name}");
+
+          // Convert skills to serializable format
+          final skillsList = dpsData.skills.entries
+              .map(
+                (skillEntry) => {
+                  'skillId': skillEntry.key,
+                  'totalDamage': skillEntry.value.totalDamage.toInt(),
+                  'totalHeal': skillEntry.value.totalHeal.toInt(),
+                  'hitCount': skillEntry.value.hitCount,
+                  'critHitCount': skillEntry.value.critHitCount,
+                  'luckyHitCount': skillEntry.value.luckyHitCount,
+                },
+              )
+              .toList();
+
+          // Convert timeline to serializable format
+          // Only send timeline if this is the selected player to save bandwidth
+          Map<String, dynamic>? timelineMap;
+          if (_selectedPlayerUid != null &&
+              uid.toString() == _selectedPlayerUid) {
+            timelineMap = {};
+            dpsData.timeline.forEach((key, value) {
+              timelineMap![key.toString()] = {
+                'd': value.damage,
+                'h': value.heal,
+                't': value.taken,
+                'sd': value.skillDamage,
+                'sh': value.skillHeal,
+              };
+            });
+          }
+
+          // Convert per-target breakdown for selected player
+          List<Map<String, dynamic>>? targetsList;
+          if (_selectedPlayerUid != null &&
+              uid.toString() == _selectedPlayerUid) {
+            targetsList = dpsData.targets.entries
+                .where(
+                  (te) => te.key != uid,
+                ) // filter out self-targets (self-heal)
+                .map(
+                  (te) => {
+                    'uid': te.key.toString(),
+                    'name': _resolveTargetName(te.key),
+                    'totalDamage': te.value.totalDamage.toInt(),
+                    'totalHeal': te.value.totalHeal.toInt(),
+                    'hitCount': te.value.hitCount,
+                    'critHitCount': te.value.critHitCount,
+                    'luckyHitCount': te.value.luckyHitCount,
+                    'skills': te.value.skills.entries
+                        .map(
+                          (se) => {
+                            'skillId': se.key,
+                            'totalDamage': se.value.totalDamage.toInt(),
+                            'totalHeal': se.value.totalHeal.toInt(),
+                            'hitCount': se.value.hitCount,
+                            'critHitCount': se.value.critHitCount,
+                            'luckyHitCount': se.value.luckyHitCount,
+                          },
+                        )
+                        .toList(),
+                  },
+                )
+                .toList();
+          }
+
+          return {
+            'uid': uid.toString(), // Add UID as string for serialization
+            'name': info?.name ?? "Unknown",
+            'isMe': uid == storage.currentPlayerUuid,
+            'classId': info?.professionId ?? 0,
+            'dps': dpsData.simpleDps,
+            'total': dpsData.totalAttackDamage.toInt(),
+            'hps': dpsData.simpleHps,
+            'totalHeal': dpsData.totalHeal.toInt(),
+            'takenDps': dpsData.simpleTakenDps,
+            'totalTaken': dpsData.totalTakenDamage.toInt(),
+            'activeCombatTicks': dpsData.activeCombatTicks,
+            'totalHitCount': dpsData.totalHitCount,
+            'critHitCount': dpsData.critHitCount,
+            'luckyHitCount': dpsData.luckyHitCount,
+            'level': info?.level ?? 0,
+            'combatPower': info?.combatPower ?? 0,
+            'rankLevel': info?.rankLevel ?? 0,
+            'critical': info?.critical ?? 0,
+            'lucky': info?.lucky ?? 0,
+            'attack': info?.attack ?? 0,
+            'defense': info?.defense ?? 0,
+            'haste': info?.haste ?? 0,
+            'hastePct': info?.hastePct ?? 0,
+            'mastery': info?.mastery ?? 0,
+            'masteryPct': info?.masteryPct ?? 0,
+            'versatility': info?.versatility ?? 0,
+            'versatilityPct': info?.versatilityPct ?? 0,
+            'seasonStrength': info?.seasonStrength ?? 0,
+            'maxHp': info?.maxHp?.toInt() ?? 0,
+            'hp': info?.hp?.toInt() ?? 0,
+            'skills': skillsList,
+            'timeline': timelineMap,
+            'targets': targetsList,
           };
-        });
-      }
-
-      // Convert per-target breakdown for selected player
-      List<Map<String, dynamic>>? targetsList;
-      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
-        targetsList = dpsData.targets.entries
-          .where((te) => te.key != uid) // filter out self-targets (self-heal)
-          .map((te) => {
-          'uid': te.key.toString(),
-          'name': _resolveTargetName(te.key),
-          'totalDamage': te.value.totalDamage.toInt(),
-          'totalHeal': te.value.totalHeal.toInt(),
-          'hitCount': te.value.hitCount,
-          'critHitCount': te.value.critHitCount,
-          'luckyHitCount': te.value.luckyHitCount,
-          'skills': te.value.skills.entries.map((se) => {
-            'skillId': se.key,
-            'totalDamage': se.value.totalDamage.toInt(),
-            'totalHeal': se.value.totalHeal.toInt(),
-            'hitCount': se.value.hitCount,
-            'critHitCount': se.value.critHitCount,
-            'luckyHitCount': se.value.luckyHitCount,
-          }).toList(),
-        }).toList();
-      }
-
-      return {
-        'uid': uid.toString(), // Add UID as string for serialization
-        'name': info?.name ?? "Unknown",
-        'isMe': uid == storage.currentPlayerUuid,
-        'classId': info?.professionId ?? 0,
-        'dps': dpsData.simpleDps,
-        'total': dpsData.totalAttackDamage.toInt(),
-        'hps': dpsData.simpleHps,
-        'totalHeal': dpsData.totalHeal.toInt(),
-        'takenDps': dpsData.simpleTakenDps,
-        'totalTaken': dpsData.totalTakenDamage.toInt(),
-        'activeCombatTicks': dpsData.activeCombatTicks,
-        'totalHitCount': dpsData.totalHitCount,
-        'critHitCount': dpsData.critHitCount,
-        'luckyHitCount': dpsData.luckyHitCount,
-        'level': info?.level ?? 0,
-        'combatPower': info?.combatPower ?? 0,
-        'rankLevel': info?.rankLevel ?? 0,
-        'critical': info?.critical ?? 0,
-        'lucky': info?.lucky ?? 0,
-        'attack': info?.attack ?? 0,
-        'defense': info?.defense ?? 0,
-        'haste': info?.haste ?? 0,
-        'hastePct': info?.hastePct ?? 0,
-        'mastery': info?.mastery ?? 0,
-        'masteryPct': info?.masteryPct ?? 0,
-        'versatility': info?.versatility ?? 0,
-        'versatilityPct': info?.versatilityPct ?? 0,
-        'seasonStrength': info?.seasonStrength ?? 0,
-        'maxHp': info?.maxHp?.toInt() ?? 0,
-        'hp': info?.hp?.toInt() ?? 0,
-        'skills': skillsList,
-        'timeline': timelineMap,
-        'targets': targetsList,
-      };
-    }).toList();
+        })
+        .toList();
 
     final combatDuration = storage.currentCombatDuration;
 
     // Serialize monsters — only send monsters with useful display info
     final monsters = storage.monsterInfoDatas.values
-      .where((m) {
-        final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
-        final hasLevel = m.level != null && m.level! > 0;
-        if (!hasHp && !hasLevel) return false;
-        if (m.isSummon) return false;
-        if (m.name == null || m.name!.isEmpty) return false;
-        if (m.name!.contains('Resonance')) return false;
-        return true;
-      })
-      .map((m) => {
-        'uid': m.uid.toString(),
-        'templateId': m.templateId,
-        'name': m.name,
-        'level': m.level,
-        'hp': m.hp?.toString(),
-        'maxHp': m.maxHp?.toString(),
-        'pos_x': m.position?['x']?.toDouble(),
-        'pos_y': m.position?['y']?.toDouble(),
-        'pos_z': m.position?['z']?.toDouble(),
-    }).toList();
+        .where((m) {
+          final hasHp = m.maxHp != null && m.maxHp! > Int64.ZERO;
+          final hasLevel = m.level != null && m.level! > 0;
+          if (!hasHp && !hasLevel) return false;
+          if (m.isSummon) return false;
+          if (m.name == null || m.name!.isEmpty) return false;
+          if (m.name!.contains('Resonance')) return false;
+          return true;
+        })
+        .map(
+          (m) => {
+            'uid': m.uid.toString(),
+            'templateId': m.templateId,
+            'name': m.name,
+            'level': m.level,
+            'hp': m.hp?.toString(),
+            'maxHp': m.maxHp?.toString(),
+            'pos_x': m.position?['x']?.toDouble(),
+            'pos_y': m.position?['y']?.toDouble(),
+            'pos_z': m.position?['z']?.toDouble(),
+          },
+        )
+        .toList();
 
     // Report HP for known bosses/creatures to bptimer.com
     _reportKnownMobsHp(storage);
@@ -1128,7 +1251,7 @@ class _HomePageState extends State<HomePage> {
       // _logger.log("First player data: ${players.first}");
       // _logger.log("Current player UUID: ${storage.currentPlayerUuid}");
     }
-    
+
     // Don't send selectedPlayerUid in regular updates to avoid overwriting close action
     // Include screen dimensions for overlay anchor calculations
     final view = WidgetsBinding.instance.platformDispatcher.views.first;
@@ -1139,7 +1262,7 @@ class _HomePageState extends State<HomePage> {
       'combatTime': combatDuration.inSeconds,
       'lineId': storage.lineId,
       'monsters': monsters,
-      'myPos': myPos, 
+      'myPos': myPos,
       'myUid': myUid.toString(),
       'screenWidth': screenSizeDp.width,
       'screenHeight': screenSizeDp.height,
@@ -1151,101 +1274,120 @@ class _HomePageState extends State<HomePage> {
     storage.checkTimeout();
 
     final players = storage.fullDpsDatas.entries
-    .where((e) => e.value.totalAttackDamage.toInt() > 0 || e.value.totalHeal.toInt() > 0 || e.value.totalTakenDamage.toInt() > 0)
-    .map((e) {
-      final uid = e.key;
-      final dpsData = e.value;
-      final info = storage.getPlayerInfoSync(uid);
-      
-      // Convert skills to serializable format
-      final skillsList = dpsData.skills.entries.map((skillEntry) => {
-        'skillId': skillEntry.key,
-        'totalDamage': skillEntry.value.totalDamage.toInt(),
-        'totalHeal': skillEntry.value.totalHeal.toInt(),
-        'hitCount': skillEntry.value.hitCount,
-        'critHitCount': skillEntry.value.critHitCount,
-        'luckyHitCount': skillEntry.value.luckyHitCount,
-      }).toList();
-      
-      // Convert timeline to serializable format
-      // Only send timeline if this is the selected player to save bandwidth
-      Map<String, dynamic>? timelineMap;
-      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
-        timelineMap = {};
-        dpsData.timeline.forEach((key, value) {
-          timelineMap![key.toString()] = {
-            'd': value.damage,
-            'h': value.heal,
-            't': value.taken,
-            'sd': value.skillDamage,
-            'sh': value.skillHeal,
+        .where(
+          (e) =>
+              e.value.totalAttackDamage.toInt() > 0 ||
+              e.value.totalHeal.toInt() > 0 ||
+              e.value.totalTakenDamage.toInt() > 0,
+        )
+        .map((e) {
+          final uid = e.key;
+          final dpsData = e.value;
+          final info = storage.getPlayerInfoSync(uid);
+
+          // Convert skills to serializable format
+          final skillsList = dpsData.skills.entries
+              .map(
+                (skillEntry) => {
+                  'skillId': skillEntry.key,
+                  'totalDamage': skillEntry.value.totalDamage.toInt(),
+                  'totalHeal': skillEntry.value.totalHeal.toInt(),
+                  'hitCount': skillEntry.value.hitCount,
+                  'critHitCount': skillEntry.value.critHitCount,
+                  'luckyHitCount': skillEntry.value.luckyHitCount,
+                },
+              )
+              .toList();
+
+          // Convert timeline to serializable format
+          // Only send timeline if this is the selected player to save bandwidth
+          Map<String, dynamic>? timelineMap;
+          if (_selectedPlayerUid != null &&
+              uid.toString() == _selectedPlayerUid) {
+            timelineMap = {};
+            dpsData.timeline.forEach((key, value) {
+              timelineMap![key.toString()] = {
+                'd': value.damage,
+                'h': value.heal,
+                't': value.taken,
+                'sd': value.skillDamage,
+                'sh': value.skillHeal,
+              };
+            });
+          }
+
+          // Convert per-target breakdown for selected player
+          List<Map<String, dynamic>>? targetsList;
+          if (_selectedPlayerUid != null &&
+              uid.toString() == _selectedPlayerUid) {
+            targetsList = dpsData.targets.entries
+                .where((te) => te.key != uid) // filter out self-targets
+                .map(
+                  (te) => {
+                    'uid': te.key.toString(),
+                    'name': _resolveTargetName(te.key),
+                    'totalDamage': te.value.totalDamage.toInt(),
+                    'totalHeal': te.value.totalHeal.toInt(),
+                    'hitCount': te.value.hitCount,
+                    'critHitCount': te.value.critHitCount,
+                    'luckyHitCount': te.value.luckyHitCount,
+                    'skills': te.value.skills.entries
+                        .map(
+                          (se) => {
+                            'skillId': se.key,
+                            'totalDamage': se.value.totalDamage.toInt(),
+                            'totalHeal': se.value.totalHeal.toInt(),
+                            'hitCount': se.value.hitCount,
+                            'critHitCount': se.value.critHitCount,
+                            'luckyHitCount': se.value.luckyHitCount,
+                          },
+                        )
+                        .toList(),
+                  },
+                )
+                .toList();
+          }
+
+          return {
+            'uid': uid.toString(),
+            'name': info?.name ?? "Unknown",
+            'isMe': uid == storage.currentPlayerUuid,
+            'classId': info?.professionId ?? 0,
+            'dps': dpsData.simpleDps,
+            'total': dpsData.totalAttackDamage.toInt(),
+            'hps': dpsData.simpleHps,
+            'totalHeal': dpsData.totalHeal.toInt(),
+            'takenDps': dpsData.simpleTakenDps,
+            'totalTaken': dpsData.totalTakenDamage.toInt(),
+            'activeCombatTicks': dpsData.activeCombatTicks,
+            'totalHitCount': dpsData.totalHitCount,
+            'critHitCount': dpsData.critHitCount,
+            'luckyHitCount': dpsData.luckyHitCount,
+            'level': info?.level ?? 0,
+            'combatPower': info?.combatPower ?? 0,
+            'rankLevel': info?.rankLevel ?? 0,
+            'critical': info?.critical ?? 0,
+            'lucky': info?.lucky ?? 0,
+            'attack': info?.attack ?? 0,
+            'defense': info?.defense ?? 0,
+            'haste': info?.haste ?? 0,
+            'hastePct': info?.hastePct ?? 0,
+            'mastery': info?.mastery ?? 0,
+            'masteryPct': info?.masteryPct ?? 0,
+            'versatility': info?.versatility ?? 0,
+            'versatilityPct': info?.versatilityPct ?? 0,
+            'seasonStrength': info?.seasonStrength ?? 0,
+            'maxHp': info?.maxHp?.toInt() ?? 0,
+            'hp': info?.hp?.toInt() ?? 0,
+            'skills': skillsList,
+            'timeline': timelineMap,
+            'targets': targetsList,
           };
-        });
-      }
-
-      // Convert per-target breakdown for selected player
-      List<Map<String, dynamic>>? targetsList;
-      if (_selectedPlayerUid != null && uid.toString() == _selectedPlayerUid) {
-        targetsList = dpsData.targets.entries
-          .where((te) => te.key != uid) // filter out self-targets
-          .map((te) => {
-          'uid': te.key.toString(),
-          'name': _resolveTargetName(te.key),
-          'totalDamage': te.value.totalDamage.toInt(),
-          'totalHeal': te.value.totalHeal.toInt(),
-          'hitCount': te.value.hitCount,
-          'critHitCount': te.value.critHitCount,
-          'luckyHitCount': te.value.luckyHitCount,
-          'skills': te.value.skills.entries.map((se) => {
-            'skillId': se.key,
-            'totalDamage': se.value.totalDamage.toInt(),
-            'totalHeal': se.value.totalHeal.toInt(),
-            'hitCount': se.value.hitCount,
-            'critHitCount': se.value.critHitCount,
-            'luckyHitCount': se.value.luckyHitCount,
-          }).toList(),
-        }).toList();
-      }
-
-      return {
-        'uid': uid.toString(),
-        'name': info?.name ?? "Unknown",
-        'isMe': uid == storage.currentPlayerUuid,
-        'classId': info?.professionId ?? 0,
-        'dps': dpsData.simpleDps,
-        'total': dpsData.totalAttackDamage.toInt(),
-        'hps': dpsData.simpleHps,
-        'totalHeal': dpsData.totalHeal.toInt(),
-        'takenDps': dpsData.simpleTakenDps,
-        'totalTaken': dpsData.totalTakenDamage.toInt(),
-        'activeCombatTicks': dpsData.activeCombatTicks,
-        'totalHitCount': dpsData.totalHitCount,
-        'critHitCount': dpsData.critHitCount,
-        'luckyHitCount': dpsData.luckyHitCount,
-        'level': info?.level ?? 0,
-        'combatPower': info?.combatPower ?? 0,
-        'rankLevel': info?.rankLevel ?? 0,
-        'critical': info?.critical ?? 0,
-        'lucky': info?.lucky ?? 0,
-        'attack': info?.attack ?? 0,
-        'defense': info?.defense ?? 0,
-        'haste': info?.haste ?? 0,
-        'hastePct': info?.hastePct ?? 0,
-        'mastery': info?.mastery ?? 0,
-        'masteryPct': info?.masteryPct ?? 0,
-        'versatility': info?.versatility ?? 0,
-        'versatilityPct': info?.versatilityPct ?? 0,
-        'seasonStrength': info?.seasonStrength ?? 0,
-        'maxHp': info?.maxHp?.toInt() ?? 0,
-        'hp': info?.hp?.toInt() ?? 0,
-        'skills': skillsList,
-        'timeline': timelineMap,
-        'targets': targetsList,
-      };
-    }).toList();
+        })
+        .toList();
 
     final combatDuration = storage.currentCombatDuration;
-    
+
     // Send with selectedPlayerUid
     _logger.log("Sending selectedPlayerUid to overlay: $_selectedPlayerUid");
     FlutterOverlayWindow.shareData({
@@ -1342,7 +1484,7 @@ class _HomePageState extends State<HomePage> {
 
     await FlutterOverlayWindow.showOverlay(
       enableDrag: false, // Disable native drag to allow content interaction
-      overlayTitle: "BlueMeter DPS",
+      overlayTitle: "bluemetersea DPS",
       overlayContent: "DPS Meter Active",
       flag: OverlayFlag.defaultFlag,
       alignment: OverlayAlignment.topLeft,
@@ -1351,12 +1493,10 @@ class _HomePageState extends State<HomePage> {
       height: 400,
       width: 600,
     );
-    
+
     // Move to a safe initial position (logical pixels)
     await Future.delayed(const Duration(milliseconds: 100));
-    await FlutterOverlayWindow.moveOverlay(
-      const OverlayPosition(0, 100),
-    );
+    await FlutterOverlayWindow.moveOverlay(const OverlayPosition(0, 100));
   }
 
   Future<void> _startVpn() async {
@@ -1369,9 +1509,9 @@ class _HomePageState extends State<HomePage> {
       _packetSubscription = eventChannel.receiveBroadcastStream().listen(
         _onPacketData,
       );
-      _upstreamSubscription = upstreamEventChannel.receiveBroadcastStream().listen(
-        _onUpstreamData,
-      );
+      _upstreamSubscription = upstreamEventChannel
+          .receiveBroadcastStream()
+          .listen(_onUpstreamData);
     } on PlatformException catch (e) {
       _logger.error("Failed to start VPN", error: e.message);
     }
@@ -1400,7 +1540,7 @@ class _HomePageState extends State<HomePage> {
         await FlutterOverlayWindow.requestPermission();
         return;
       }
-      
+
       await _startOverlay();
       await _startVpn();
     }
@@ -1409,21 +1549,24 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('BlueMeterSEA Mobile'),
-      ),
+      appBar: AppBar(title: const Text('bluemeterseaSEA Mobile')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 20,
+                ),
                 backgroundColor: _isVpnRunning ? Colors.red : Colors.green,
               ),
               onPressed: _toggleService,
               child: Text(
-                _isVpnRunning ? TranslationService().translate('Stop') : TranslationService().translate('Start'),
+                _isVpnRunning
+                    ? TranslationService().translate('Stop')
+                    : TranslationService().translate('Start'),
                 style: const TextStyle(fontSize: 24, color: Colors.white),
               ),
             ),
@@ -1433,4 +1576,3 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
-

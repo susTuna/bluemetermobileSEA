@@ -1,5 +1,5 @@
 /// Map de tous les IDs de skills vers leurs noms
-/// Extrait de BlueMeter.Core/Extends/Data/SkillConverter.cs
+/// Extrait de bluemetersea.Core/Extends/Data/SkillConverter.cs
 library skill_names;
 
 import '../services/translation_service.dart';

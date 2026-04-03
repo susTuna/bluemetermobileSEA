@@ -1,6 +1,6 @@
-# BlueMeter — DPS Meter for Blue Protocol: Star Resonance
+# bluemeterSEA — DPS Meter for Blue Protocol: Star Resonance SEA
 
-## Screenshots / Captures d'écran
+## Screenshots
 
 <p float="left">
   <img src="images/Screenshot_BPSR_20260214_172155.jpg" width="240" />
@@ -10,92 +10,13 @@
 
 ## Quick Links
 
-- [Latest Release](https://github.com/jbourny/bluemetermobile/releases/latest)
-- [Français](#français)
-- [English](#english)
+- [Latest Release](https://github.com/sustuna/bluemeterseamobilesea/releases/latest)
 
 ---
 
-## Français
-
 ### Description
 
-BlueMeter est un DPS/Heal meter mobile pour **Blue Protocol: Star Resonance**.
-L'application affiche les informations de combat en temps réel via un overlay Android.
-
-### Nouveautés — Version 1.1
-
-- Meilleure prise en compte des données transmises par le jeu.
-- Plus d'informations affichées sur l'écran de détail de DPS.
-- Affichage d'une petite boussole pour les monstres à proximité *(peut encore ne pas fonctionner dans certains cas)*.
-- Affichage du numéro de ligne.
-- Affichage des HP par ligne pour Boss/Monstre grâce à **bptimer.com**.
-
-### Fonctionnalités principales
-
-- Overlay flottant avec DPS / Heal / Dégâts subis (instantané + total).
-- Reset rapide des compteurs.
-- Vue de détail DPS enrichie.
-- Informations de proximité des monstres.
-
-### Plateforme
-
-- Android uniquement.
-- iOS : non prévu à court terme (limitations d'overlay).
-
-### Installation
-
-1. Cloner le dépôt et ouvrir le projet Flutter.
-2. Créé un fichier dart_defines.json avec : {"BPTIMER_API_KEY": "xxxxxxxxxxxx"} (Demander à bptimer pour obtenir une clé)
-3. Construire l'APK :
-
-```bash
-flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-define-from-file=dart_defines.json
-```
-
-4. Installer l'APK sur l'appareil Android.
-5. Autoriser la permission d'affichage par-dessus les autres applications.
-
-### Utilisation
-
-- Lancer le jeu, puis BlueMeter.
-- Vérifier que l'overlay est bien autorisé.
-- Utiliser le bouton de reset si nécessaire.
-
-### Dépannage rapide
-
-- Overlay absent : vérifier les permissions "Afficher par-dessus les autres applis".
-- Problème de déplacement de la fenêtre : redémarrer l'application.
-- Boussole de proximité imprécise : fonctionnalité encore en amélioration.
-
-### Contribution
-
-- Les contributions (issues / PR) sont les bienvenues.
-
-### Vie privée & sécurité
-
-- Aucune donnée personnelle n'est collectée ni envoyée.
-
-### Licence
-
-- GNU Affero General Public License v3.
-
-### Remerciements
-
-- Merci au projet PC BlueMeter : https://github.com/caaatto/BlueMeter
-- Merci à **bptimer.com** pour les données utilisées dans l'affichage HP par ligne : https://bptimer.com
-
-### Soutien
-
-- PayPal : https://paypal.me/JBourny
-
----
-
-## English
-
-### Description
-
-BlueMeter is a mobile DPS/Heal meter for **Blue Protocol: Star Resonance**.
+bluemeterSEA is a mobile DPS/Heal meter for **Blue Protocol: Star Resonance SEA**.
 The app provides real-time combat information through an Android floating overlay.
 
 ### What's New — Version 1.1
@@ -104,7 +25,7 @@ The app provides real-time combat information through an Android floating overla
 - More information on the DPS detail screen.
 - Small compass for nearby monsters *(may still be unreliable in some situations)*.
 - Line number display.
-- HP-by-line display for Boss/Monster thanks to **bptimer.com**.
+- HP-by-line display for Boss/Monster thanks to **bptimer.com** *(may still be unreliable in some situations)*.
 
 ### Key Features
 
@@ -133,7 +54,7 @@ flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-d
 
 ### Usage
 
-- Start the game, then launch BlueMeter.
+- Start the game, then launch bluemetersea.
 - Ensure overlay permission is granted.
 - Use the reset button whenever needed.
 
@@ -157,9 +78,6 @@ flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-d
 
 ### Acknowledgements
 
-- Thanks to the PC BlueMeter project: https://github.com/caaatto/BlueMeter
+- Thanks to the PC bluemetersea project: https://github.com/caaatto/bluemetersea
 - Thanks to **bptimer.com** for HP-by-line data used in the app: https://bptimer.com
-
-### Support
-
-- PayPal: https://paypal.me/JBourny
+- Thanks to the Mobile bluemetersea project: https://github.com/jbourny/bluemeterseamobile
