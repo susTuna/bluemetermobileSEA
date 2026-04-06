@@ -187,7 +187,14 @@ class _PlayerListState extends State<_PlayerList> {
       name = "Moi";
     }
 
-    String profession = cls.name;
+    String profession = "Unknown";
+
+    if (p['subProfession'] != "") {
+      profession = p['subProfession'];
+    } else if (cls != Classes.unknown) {
+      profession = cls.name;
+    }
+
     String combatPower = p['combatPower']?.toString() ?? "0";
     String seasonStrength = p['seasonStrength']?.toString() ?? "0";
 

@@ -1,3 +1,4 @@
+import 'package:bluemetersea_mobile/core/models/sub_classes.dart';
 import 'package:flutter/material.dart';
 import 'package:fixnum/fixnum.dart';
 import '../core/models/classes.dart';
@@ -39,7 +40,8 @@ class PlayerDetailCard extends StatefulWidget {
   State<PlayerDetailCard> createState() => _PlayerDetailCardState();
 }
 
-class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerProviderStateMixin {
+class _PlayerDetailCardState extends State<PlayerDetailCard>
+    with SingleTickerProviderStateMixin {
   bool _showDps = true;
   bool _showHps = true;
   bool _showTaken = true;
@@ -61,6 +63,9 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final cls = Classes.fromId(widget.playerInfo?.professionId ?? 0);
+    final sub = SubClasses.detectFromSkills(
+      widget.dpsData.skills.map((k, v) => MapEntry(k, v)),
+    );
     var name = widget.playerInfo?.name ?? "Unknown";
     if (widget.isMe && (name == "Unknown" || name.isEmpty)) {
       name = TranslationService().translate('Me');
@@ -87,13 +92,15 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(name, cls),
+            _buildHeader(name, cls, sub),
             _buildCombatStats(filteredDamage, filteredHeal),
             if (widget.dpsData.targets.isNotEmpty) _buildTargetFilter(),
             Container(
               height: 24,
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFF2A2E38), width: 0.5)),
+                border: Border(
+                  top: BorderSide(color: Color(0xFF2A2E38), width: 0.5),
+                ),
               ),
               child: TabBar(
                 controller: _tabController,
@@ -104,7 +111,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                 dividerColor: Colors.transparent,
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white38,
-                labelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                labelStyle: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
                 tabs: [
                   Tab(text: TranslationService().translate('Skills')),
                   Tab(text: TranslationService().translate('Chart')),
@@ -130,7 +140,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                       : Center(
                           child: Text(
                             TranslationService().translate('NoData'),
-                            style: const TextStyle(color: Colors.white24, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.white24,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                 ],
@@ -151,7 +164,8 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
 
   Int64 _getFilteredDamage() {
     if (_selectedTargetUid == null) return widget.dpsData.totalAttackDamage;
-    return widget.dpsData.targets[_selectedTargetUid]?.totalDamage ?? Int64.ZERO;
+    return widget.dpsData.targets[_selectedTargetUid]?.totalDamage ??
+        Int64.ZERO;
   }
 
   Int64 _getFilteredHeal() {
@@ -198,13 +212,24 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
 
   // --- Header ---
 
-  Widget _buildHeader(String name, Classes cls) {
+  Widget _buildHeader(String name, Classes cls, SubClass sub) {
     final info = widget.playerInfo;
     final hitCount = _getFilteredHitCount();
     final critHits = _getFilteredCritHits();
     final luckyHits = _getFilteredLuckyHits();
     final critRate = hitCount > 0 ? (critHits / hitCount * 100) : 0.0;
     final luckyRate = hitCount > 0 ? (luckyHits / hitCount * 100) : 0.0;
+
+    String classLabel;
+    if (sub != SubClass.unknown) {
+      classLabel = SubClasses.getName(sub);
+    } else if (cls != Classes.unknown) {
+      classLabel = cls.name;
+    } else {
+      classLabel = "Unknown";
+    }
+
+    bool showIcon = cls != Classes.unknown;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -220,7 +245,9 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
               Colors.transparent,
             ],
           ),
-          border: const Border(bottom: BorderSide(color: Color(0xFF2A2E38), width: 0.5)),
+          border: const Border(
+            bottom: BorderSide(color: Color(0xFF2A2E38), width: 0.5),
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -228,7 +255,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
             // Row 1: Icon + Name + stat chips + close
             Row(
               children: [
-                if (cls != Classes.unknown) ...[
+                if (showIcon) ...[
                   Container(
                     padding: const EdgeInsets.all(1.5),
                     decoration: BoxDecoration(
@@ -239,8 +266,11 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                       cls.iconPath,
                       width: 16,
                       height: 16,
-                      errorBuilder: (context, error, stackTrace) =>
-                          Icon(Icons.person, color: _getClassColor(cls), size: 16),
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.person,
+                        color: _getClassColor(cls),
+                        size: 16,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -258,27 +288,30 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (cls != Classes.unknown) ...[
-                  const SizedBox(width: 3),
-                  Text(
-                    cls.name,
-                    style: TextStyle(color: _getClassColor(cls).withValues(alpha: 0.5), fontSize: 7),
+                const SizedBox(width: 3),
+                Text(
+                  classLabel,
+                  style: TextStyle(
+                    color: _getClassColor(cls).withValues(alpha: 0.5),
+                    fontSize: 7,
                   ),
-                ],
+                ),
                 const SizedBox(width: 6),
                 // Stat labels
                 Expanded(
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _buildStatLabels(info),
-                    ),
+                    child: Row(children: _buildStatLabels(info)),
                   ),
                 ),
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: widget.onClose,
-                  child: const Icon(Icons.close, color: Colors.white38, size: 14),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white38,
+                    size: 14,
+                  ),
                 ),
               ],
             ),
@@ -286,28 +319,48 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
             // Row 2: Timer + Hits + HP bar + Crit/Lucky rates
             Row(
               children: [
-                Icon(Icons.timer_outlined, size: 8, color: Colors.white.withValues(alpha: 0.35)),
+                Icon(
+                  Icons.timer_outlined,
+                  size: 8,
+                  color: Colors.white.withValues(alpha: 0.35),
+                ),
                 const SizedBox(width: 2),
                 Text(
                   _formatDuration(widget.dpsData.activeCombatTicks),
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 8,
+                  ),
                 ),
                 if (widget.dpsData.totalHitCount > 0) ...[
                   const SizedBox(width: 5),
                   Text(
                     '${widget.dpsData.totalHitCount}h',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 8),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      fontSize: 8,
+                    ),
                   ),
                 ],
-                if (info != null && info.maxHp != null && info.maxHp! > Int64.ZERO) ...[
+                if (info != null &&
+                    info.maxHp != null &&
+                    info.maxHp! > Int64.ZERO) ...[
                   const SizedBox(width: 6),
                   _buildHpMiniBar(info),
                 ],
                 const Spacer(),
                 if (hitCount > 0) ...[
-                  _buildRateBadge('C', '${critRate.toStringAsFixed(1)}%', const Color(0xFFFF5252)),
+                  _buildRateBadge(
+                    'C',
+                    '${critRate.toStringAsFixed(1)}%',
+                    const Color(0xFFFF5252),
+                  ),
                   const SizedBox(width: 3),
-                  _buildRateBadge('L', '${luckyRate.toStringAsFixed(1)}%', const Color(0xFF69F0AE)),
+                  _buildRateBadge(
+                    'L',
+                    '${luckyRate.toStringAsFixed(1)}%',
+                    const Color(0xFF69F0AE),
+                  ),
                 ],
               ],
             ),
@@ -324,24 +377,35 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
     void addStat(String label, int? value, Color color, {int? pct}) {
       if (value == null || value <= 0) return;
       String text = _formatNumber(value);
-      if (pct != null && pct > 0) text += '(${(pct / 100.0).toStringAsFixed(1)}%)';
-      labels.add(Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: '$label ',
-                style: TextStyle(color: color.withValues(alpha: 0.5), fontSize: 7, fontWeight: FontWeight.bold),
-              ),
-              TextSpan(
-                text: text,
-                style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.w500),
-              ),
-            ],
+      if (pct != null && pct > 0)
+        text += '(${(pct / 100.0).toStringAsFixed(1)}%)';
+      labels.add(
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '$label ',
+                  style: TextStyle(
+                    color: color.withValues(alpha: 0.5),
+                    fontSize: 7,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(
+                  text: text,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ));
+      );
     }
 
     if (info.level != null && info.level! > 0) {
@@ -350,7 +414,7 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
     if (info.combatPower != null && info.combatPower! > 0) {
       addStat('AS', info.combatPower, const Color(0xFFFFD54F));
     }
-    if (info.seasonStrength != null && info.seasonStrength! >0) {
+    if (info.seasonStrength != null && info.seasonStrength! > 0) {
       addStat('IS', info.seasonStrength, const Color(0xFFFFCC80));
     }
     addStat('ATK', info.attack, const Color(0xFFFF8A65));
@@ -358,17 +422,30 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
     addStat('Crit', info.critical, const Color(0xFFFF5252));
     addStat('Luck', info.lucky, const Color(0xFF69F0AE));
     addStat('Haste', info.haste, const Color(0xFF80DEEA), pct: info.hastePct);
-    addStat('Mast', info.mastery, const Color(0xFFCE93D8), pct: info.masteryPct);
-    addStat('Vers', info.versatility, const Color(0xFFA5D6A7), pct: info.versatilityPct);
+    addStat(
+      'Mast',
+      info.mastery,
+      const Color(0xFFCE93D8),
+      pct: info.masteryPct,
+    );
+    addStat(
+      'Vers',
+      info.versatility,
+      const Color(0xFFA5D6A7),
+      pct: info.versatilityPct,
+    );
 
     return labels;
   }
 
   Widget _buildHpMiniBar(PlayerInfo info) {
-    final hpPct = (info.hp != null && info.maxHp != null && info.maxHp! > Int64.ZERO)
+    final hpPct =
+        (info.hp != null && info.maxHp != null && info.maxHp! > Int64.ZERO)
         ? (info.hp!.toDouble() / info.maxHp!.toDouble())
         : 0.0;
-    final hpColor = hpPct < 0.3 ? Colors.redAccent : (hpPct < 0.6 ? Colors.orangeAccent : const Color(0xFF69F0AE));
+    final hpColor = hpPct < 0.3
+        ? Colors.redAccent
+        : (hpPct < 0.6 ? Colors.orangeAccent : const Color(0xFF69F0AE));
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -406,9 +483,23 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 7, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.6),
+              fontSize: 7,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(width: 1),
-          Text(value, style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.w600)),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -495,19 +586,34 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                 children: [
                   Icon(icon, size: 8, color: color.withValues(alpha: 0.7)),
                   const SizedBox(width: 2),
-                  Text(label, style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 7, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: color.withValues(alpha: 0.7),
+                      fontSize: 7,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ],
               ),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   _formatNumber(value),
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Text(
                 _formatNumber(total),
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 7),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  fontSize: 7,
+                ),
               ),
             ],
           ),
@@ -521,10 +627,9 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
   Widget _buildTargetFilter() {
     // Filter out self from targets (self-heals)
     final selfUid = widget.dpsData.uid;
-    final targetEntries = widget.dpsData.targets.entries
-      .where((e) => e.key != selfUid)
-      .toList()
-      ..sort((a, b) => b.value.totalDamage.compareTo(a.value.totalDamage));
+    final targetEntries =
+        widget.dpsData.targets.entries.where((e) => e.key != selfUid).toList()
+          ..sort((a, b) => b.value.totalDamage.compareTo(a.value.totalDamage));
     if (targetEntries.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -544,9 +649,13 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
           const SizedBox(width: 3),
           ...targetEntries.take(10).map((e) {
             final name = _getTargetName(e.key);
-            final short = name.length > 12 ? '${name.substring(0, 12)}...' : name;
+            final short = name.length > 12
+                ? '${name.substring(0, 12)}...'
+                : name;
             final pct = widget.dpsData.totalAttackDamage > Int64.ZERO
-                ? (e.value.totalDamage.toDouble() / widget.dpsData.totalAttackDamage.toDouble() * 100)
+                ? (e.value.totalDamage.toDouble() /
+                      widget.dpsData.totalAttackDamage.toDouble() *
+                      100)
                 : 0.0;
             return Padding(
               padding: const EdgeInsets.only(right: 3),
@@ -574,10 +683,14 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blueAccent.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.04),
+          color: isSelected
+              ? Colors.blueAccent.withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? Colors.blueAccent.withValues(alpha: 0.5) : Colors.white10,
+            color: isSelected
+                ? Colors.blueAccent.withValues(alpha: 0.5)
+                : Colors.white10,
             width: 0.5,
           ),
         ),
@@ -596,7 +709,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
               const SizedBox(width: 3),
               Text(
                 '${pct.toStringAsFixed(0)}%',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 7),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  fontSize: 7,
+                ),
               ),
             ],
           ],
@@ -654,11 +770,13 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
 
     final totalDamageAndHeal = sortedSkills.fold<int>(
       0,
-      (sum, entry) => sum + entry.value.totalDamage.toInt() + entry.value.totalHeal.toInt(),
+      (sum, entry) =>
+          sum + entry.value.totalDamage.toInt() + entry.value.totalHeal.toInt(),
     );
 
     final maxSkillTotal = sortedSkills.isNotEmpty
-        ? (sortedSkills.first.value.totalDamage.toInt() + sortedSkills.first.value.totalHeal.toInt())
+        ? (sortedSkills.first.value.totalDamage.toInt() +
+              sortedSkills.first.value.totalHeal.toInt())
         : 1;
 
     return ListView.builder(
@@ -669,14 +787,24 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
         final name = entry.key;
         final skill = entry.value;
         final skillTotal = skill.totalDamage.toInt() + skill.totalHeal.toInt();
-        final percentage = totalDamageAndHeal > 0 ? (skillTotal / totalDamageAndHeal * 100) : 0.0;
-        final barWidthFactor = maxSkillTotal > 0 ? (skillTotal / maxSkillTotal) : 0.0;
+        final percentage = totalDamageAndHeal > 0
+            ? (skillTotal / totalDamageAndHeal * 100)
+            : 0.0;
+        final barWidthFactor = maxSkillTotal > 0
+            ? (skillTotal / maxSkillTotal)
+            : 0.0;
 
         final isHeal = skill.totalHeal > skill.totalDamage;
-        final color = isHeal ? const Color(0xFF69F0AE) : const Color(0xFFFF5252);
+        final color = isHeal
+            ? const Color(0xFF69F0AE)
+            : const Color(0xFFFF5252);
         final avg = skill.hitCount > 0 ? skillTotal / skill.hitCount : 0;
-        final critPct = skill.hitCount > 0 ? (skill.critHitCount / skill.hitCount * 100) : 0.0;
-        final luckyPct = skill.hitCount > 0 ? (skill.luckyHitCount / skill.hitCount * 100) : 0.0;
+        final critPct = skill.hitCount > 0
+            ? (skill.critHitCount / skill.hitCount * 100)
+            : 0.0;
+        final luckyPct = skill.hitCount > 0
+            ? (skill.luckyHitCount / skill.hitCount * 100)
+            : 0.0;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 1),
@@ -688,7 +816,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0.05)],
+                      colors: [
+                        color.withValues(alpha: 0.2),
+                        color.withValues(alpha: 0.05),
+                      ],
                     ),
                     borderRadius: BorderRadius.circular(3),
                   ),
@@ -701,7 +832,11 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                     Expanded(
                       child: Text(
                         name,
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -713,12 +848,19 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                           children: [
                             Text(
                               _formatNumber(skillTotal),
-                              style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(width: 3),
                             Text(
                               '${percentage.toStringAsFixed(1)}%',
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.35),
+                                fontSize: 8,
+                              ),
                             ),
                           ],
                         ),
@@ -726,22 +868,38 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
                           children: [
                             Text(
                               '${skill.hitCount}h',
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 7),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                fontSize: 7,
+                              ),
                             ),
                             Text(
                               ' ~${_formatNumber(avg)}',
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 7),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                fontSize: 7,
+                              ),
                             ),
                             if (critPct > 0) ...[
                               Text(
                                 ' C:${critPct.toStringAsFixed(0)}%',
-                                style: TextStyle(color: const Color(0xFFFF5252).withValues(alpha: 0.5), fontSize: 7),
+                                style: TextStyle(
+                                  color: const Color(
+                                    0xFFFF5252,
+                                  ).withValues(alpha: 0.5),
+                                  fontSize: 7,
+                                ),
                               ),
                             ],
                             if (luckyPct > 0) ...[
                               Text(
                                 ' L:${luckyPct.toStringAsFixed(0)}%',
-                                style: TextStyle(color: const Color(0xFF69F0AE).withValues(alpha: 0.5), fontSize: 7),
+                                style: TextStyle(
+                                  color: const Color(
+                                    0xFF69F0AE,
+                                  ).withValues(alpha: 0.5),
+                                  fontSize: 7,
+                                ),
                               ),
                             ],
                           ],
@@ -763,21 +921,21 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
   Color _getClassColor(Classes cls) {
     switch (cls) {
       case Classes.stormblade:
-        return const Color(0xFF64B5F6);
+        return Colors.purpleAccent;
       case Classes.frostMage:
-        return const Color(0xFFCE93D8);
+        return Colors.lightBlueAccent;
       case Classes.windKnight:
-        return const Color(0xFF81C784);
+        return Colors.greenAccent;
       case Classes.verdantOracle:
-        return const Color(0xFFA5D6A7);
+        return Colors.lightGreenAccent;
       case Classes.heavyGuardian:
-        return const Color(0xFFFFB74D);
+        return Colors.green.shade500;
       case Classes.marksman:
-        return const Color(0xFFFFF176);
+        return Colors.amberAccent;
       case Classes.shieldKnight:
-        return const Color(0xFF7986CB);
+        return Colors.indigoAccent;
       case Classes.soulMusician:
-        return const Color(0xFFF48FB1);
+        return Colors.pinkAccent;
       default:
         return Colors.grey;
     }

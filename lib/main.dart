@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:bluemetersea_mobile/core/models/sub_classes.dart';
 import 'package:bluemetersea_mobile/core/services/translation_service.dart';
 import 'package:bluemetersea_mobile/views/dps_view.dart';
 import 'package:bluemetersea_mobile/views/nearby_view.dart';
@@ -1174,11 +1175,16 @@ class _HomePageState extends State<HomePage> {
                 .toList();
           }
 
+          final subProf = SubClasses.detectFromSkills({
+            for (var s in dpsData.skills.keys) s: null,
+          });
+
           return {
             'uid': uid.toString(), // Add UID as string for serialization
             'name': info?.name ?? "Unknown",
             'isMe': uid == storage.currentPlayerUuid,
             'classId': info?.professionId ?? 0,
+            'subProfession': SubClasses.getName(subProf),
             'dps': dpsData.simpleDps,
             'total': dpsData.totalAttackDamage.toInt(),
             'hps': dpsData.simpleHps,
