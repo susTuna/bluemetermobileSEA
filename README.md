@@ -2,10 +2,10 @@
 
 ## Screenshots
 
-<p float="left">
-  <img src="images/Screenshot_BPSR_20260214_172155.jpg" width="240" />
-  <img src="images/Screenshot_BPSR_20260214_172147.jpg" width="240" />
-  <img src="images/Screenshot_BPSR_20260214_172140.jpg" width="240" />
+<p float="center">
+  <img src="images/Screenshot_2026-04-06-22-26-02-568_sea.haoplay.game.gp.bpsr.jpg" width="240" />
+  <img src="images/Screenshot_2026-04-06-22-22-51-755_sea.haoplay.game.gp.bpsr.jpg" width="240" />
+  <img src="images/Screenshot_2026-04-06-22-23-09-144_sea.haoplay.game.gp.bpsr.jpg" width="240" />
 </p>
 
 ## Quick Links
