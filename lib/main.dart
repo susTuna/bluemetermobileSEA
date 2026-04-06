@@ -968,7 +968,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'bluemeterseaSEA Mobile',
+      title: 'BlueMeterSEA Mobile',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
@@ -1106,7 +1106,8 @@ class _HomePageState extends State<HomePage> {
           final dpsData = e.value;
           // Use synchronous getter to avoid await overhead
           final info = storage.getPlayerInfoSync(uid);
-          // _logger.log("UpdateOverlay - Processing UID: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.name}");
+          // _logger.log("UpdateOverlay - Processing IS: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.seasonStrength}");
+          // _logger.log("UpdateOverlay - Processing Class: $uid, isMe: ${uid == storage.currentPlayerUuid}, Name: ${info?.professionId}");
 
           // Convert skills to serializable format
           final skillsList = dpsData.skills.entries

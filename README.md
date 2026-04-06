@@ -1,4 +1,4 @@
-# bluemeterSEA — DPS Meter for Blue Protocol: Star Resonance SEA
+# BlueMeterSEA — DPS Meter for Blue Protocol: Star Resonance SEA
 
 ## Screenshots
 
@@ -16,7 +16,7 @@
 
 ### Description
 
-bluemeterSEA is a mobile DPS/Heal meter for **Blue Protocol: Star Resonance SEA**.
+BlueMeterSEA is a mobile DPS/Heal meter for **Blue Protocol: Star Resonance SEA**.
 The app provides real-time combat information through an Android floating overlay.
 
 ### What's New — Version 1.1

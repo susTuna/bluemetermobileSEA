@@ -74,7 +74,7 @@ class OverlayColorTheme {
 const Map<String, OverlayColorTheme> kOverlayThemes = {
   'dark': OverlayColorTheme(
     id: 'dark',
-    name: 'Sombre',
+    name: 'Dark',
     backgroundColor: Color(0xFF000000),
     sidebarColor: Color(0xFF000000),
     accentColor: Color(0xFF2196F3),
@@ -84,7 +84,7 @@ const Map<String, OverlayColorTheme> kOverlayThemes = {
   ),
   'ocean': OverlayColorTheme(
     id: 'ocean',
-    name: 'Océan',
+    name: 'Ocean',
     backgroundColor: Color(0xFF0D1B2A),
     sidebarColor: Color(0xFF0A1628),
     accentColor: Color(0xFF00BCD4),
@@ -94,7 +94,7 @@ const Map<String, OverlayColorTheme> kOverlayThemes = {
   ),
   'forest': OverlayColorTheme(
     id: 'forest',
-    name: 'Forêt',
+    name: 'Forest',
     backgroundColor: Color(0xFF0D1F0D),
     sidebarColor: Color(0xFF0A1A0A),
     accentColor: Color(0xFF4CAF50),
@@ -104,7 +104,7 @@ const Map<String, OverlayColorTheme> kOverlayThemes = {
   ),
   'amethyst': OverlayColorTheme(
     id: 'amethyst',
-    name: 'Améthyste',
+    name: 'Amethyst',
     backgroundColor: Color(0xFF1A0D2E),
     sidebarColor: Color(0xFF150A28),
     accentColor: Color(0xFFAB47BC),
@@ -114,7 +114,7 @@ const Map<String, OverlayColorTheme> kOverlayThemes = {
   ),
   'crimson': OverlayColorTheme(
     id: 'crimson',
-    name: 'Carmin',
+    name: 'Crimson',
     backgroundColor: Color(0xFF1A0A0A),
     sidebarColor: Color(0xFF150808),
     accentColor: Color(0xFFE53935),
@@ -124,7 +124,7 @@ const Map<String, OverlayColorTheme> kOverlayThemes = {
   ),
   'midnight': OverlayColorTheme(
     id: 'midnight',
-    name: 'Minuit',
+    name: 'Midnight',
     backgroundColor: Color(0xFF0F0F23),
     sidebarColor: Color(0xFF0A0A1A),
     accentColor: Color(0xFF5C6BC0),

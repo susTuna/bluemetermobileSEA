@@ -40,7 +40,7 @@ class SettingsView extends StatelessWidget {
           const SizedBox(height: 8),
 
           // --- Theme Section ---
-          _SectionHeader(title: 'Thème', textColor: textColor),
+          _SectionHeader(title: 'Theme', textColor: textColor),
           const SizedBox(height: 4),
           _ThemeSelector(
             currentThemeId: settings.themeId,
@@ -55,7 +55,7 @@ class SettingsView extends StatelessWidget {
           const SizedBox(height: 8),
 
           // --- Opacity Section ---
-          _SectionHeader(title: 'Opacité', textColor: textColor),
+          _SectionHeader(title: 'Opacity', textColor: textColor),
           const SizedBox(height: 2),
           _OpacitySlider(
             value: settings.backgroundOpacity,
