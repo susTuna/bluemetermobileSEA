@@ -672,6 +672,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                             DpsView(
                               players: _players,
                               combatTime: _combatTime,
+                              showProfession: _settings.showProfession,
                               onSelectPlayer: (uid) {
                                 final sendPort =
                                     IsolateNameServer.lookupPortByName(
@@ -692,6 +693,7 @@ class _OverlayWidgetState extends State<OverlayWidget> {
                               settings: _settings,
                               onThemeChanged: () => setState(() {}),
                               onOpacityChanged: () => setState(() {}),
+                              onProfessionToggled: (value) => setState(() {}),
                               onAnchorSelected: (anchor) =>
                                   _applyAnchor(anchor),
                             ),

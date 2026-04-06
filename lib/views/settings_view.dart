@@ -5,6 +5,7 @@ class SettingsView extends StatelessWidget {
   final OverlaySettings settings;
   final VoidCallback onThemeChanged;
   final VoidCallback onOpacityChanged;
+  final Function(bool) onProfessionToggled;
   final Function(OverlayAnchor anchor) onAnchorSelected;
 
   const SettingsView({
@@ -12,6 +13,7 @@ class SettingsView extends StatelessWidget {
     required this.settings,
     required this.onThemeChanged,
     required this.onOpacityChanged,
+    required this.onProfessionToggled,
     required this.onAnchorSelected,
   });
 
@@ -67,6 +69,21 @@ class SettingsView extends StatelessWidget {
             accentColor: accentColor,
             textColor: textColor,
             secondaryColor: secondaryColor,
+          ),
+          const SizedBox(height: 8),
+
+          // --- Display Section ---
+          _SectionHeader(title: 'Display', textColor: textColor),
+          const SizedBox(height: 4),
+          _ProfessionToggle(
+            value: settings.showProfession,
+            onChanged: (v) {
+              settings.showProfession = v;
+              settings.saveProfessionVisibility();
+              onProfessionToggled(v);
+            },
+            accentColor: accentColor,
+            textColor: textColor,
           ),
         ],
       ),
@@ -133,10 +150,7 @@ class _AnchorRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     anchor.name,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 9,
-                    ),
+                    style: TextStyle(color: textColor, fontSize: 9),
                   ),
                 ],
               ),
@@ -178,7 +192,9 @@ class _ThemeSelector extends StatelessWidget {
               color: theme.backgroundColor,
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: isSelected ? theme.accentColor : theme.accentColor.withValues(alpha: 0.3),
+                color: isSelected
+                    ? theme.accentColor
+                    : theme.accentColor.withValues(alpha: 0.3),
                 width: isSelected ? 1.5 : 0.5,
               ),
             ),
@@ -197,10 +213,7 @@ class _ThemeSelector extends StatelessWidget {
                 Text(
                   theme.name,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: theme.textColor,
-                    fontSize: 8,
-                  ),
+                  style: TextStyle(color: theme.textColor, fontSize: 8),
                 ),
               ],
             ),
@@ -253,10 +266,7 @@ class _OpacitySliderState extends State<_OpacitySlider> {
       children: [
         Text(
           '${(_currentValue * 100).round()}%',
-          style: TextStyle(
-            color: widget.secondaryColor,
-            fontSize: 10,
-          ),
+          style: TextStyle(color: widget.secondaryColor, fontSize: 10),
         ),
         Expanded(
           child: SliderTheme(
@@ -281,6 +291,64 @@ class _OpacitySliderState extends State<_OpacitySlider> {
               onChangeEnd: (v) {
                 widget.onChanged(v);
               },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfessionToggle extends StatelessWidget {
+  final bool value;
+  final Function(bool) onChanged;
+  final Color accentColor;
+  final Color textColor;
+
+  const _ProfessionToggle({
+    required this.value,
+    required this.onChanged,
+    required this.accentColor,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Show Profession',
+          style: TextStyle(color: textColor, fontSize: 10),
+        ),
+        GestureDetector(
+          onTap: () => onChanged(!value),
+          child: Container(
+            width: 36,
+            height: 20,
+            decoration: BoxDecoration(
+              color: value
+                  ? accentColor.withValues(alpha: 0.3)
+                  : accentColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: accentColor.withValues(alpha: value ? 0.6 : 0.3),
+                width: 0.5,
+              ),
+            ),
+            child: Align(
+              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

@@ -5,6 +5,7 @@ import '../../core/services/translation_service.dart';
 class DpsView extends StatefulWidget {
   final List<Map<String, dynamic>> players;
   final int combatTime;
+  final bool showProfession;
   final Function(String) onSelectPlayer;
   final Function(int) onTabChanged;
 
@@ -12,6 +13,7 @@ class DpsView extends StatefulWidget {
     super.key,
     required this.players,
     required this.combatTime,
+    required this.showProfession,
     required this.onSelectPlayer,
     required this.onTabChanged,
   });
@@ -94,16 +96,19 @@ class _DpsViewState extends State<DpsView> with SingleTickerProviderStateMixin {
               _PlayerList(
                 players: widget.players,
                 metricType: "dps",
+                showProfession: widget.showProfession,
                 onSelectPlayer: widget.onSelectPlayer,
               ),
               _PlayerList(
                 players: widget.players,
                 metricType: "taken",
+                showProfession: widget.showProfession,
                 onSelectPlayer: widget.onSelectPlayer,
               ),
               _PlayerList(
                 players: widget.players,
                 metricType: "heal",
+                showProfession: widget.showProfession,
                 onSelectPlayer: widget.onSelectPlayer,
               ),
             ],
@@ -117,11 +122,13 @@ class _DpsViewState extends State<DpsView> with SingleTickerProviderStateMixin {
 class _PlayerList extends StatefulWidget {
   final List<Map<String, dynamic>> players;
   final String metricType;
+  final bool showProfession;
   final Function(String) onSelectPlayer;
 
   const _PlayerList({
     required this.players,
     required this.metricType,
+    required this.showProfession,
     required this.onSelectPlayer,
   });
 
@@ -245,7 +252,9 @@ class _PlayerListState extends State<_PlayerList> {
                   ],
                   Expanded(
                     child: Text(
-                      '$name-$profession ($combatPower+$seasonStrength)',
+                      widget.showProfession
+                          ? '$name-$profession ($combatPower+$seasonStrength)'
+                          : '$name ($combatPower+$seasonStrength)',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w500,

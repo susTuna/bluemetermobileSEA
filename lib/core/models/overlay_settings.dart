@@ -152,6 +152,7 @@ class OverlaySettings {
 
   // State
   bool isMinimized;
+  bool showProfession;
 
   OverlaySettings({
     this.themeId = 'dark',
@@ -163,9 +164,11 @@ class OverlaySettings {
     this.miniX = 0,
     this.miniY = 100,
     this.isMinimized = false,
+    this.showProfession = true,
   });
 
-  OverlayColorTheme get theme => kOverlayThemes[themeId] ?? kOverlayThemes['dark']!;
+  OverlayColorTheme get theme =>
+      kOverlayThemes[themeId] ?? kOverlayThemes['dark']!;
 
   /// Load settings from SharedPreferences
   static Future<OverlaySettings> load() async {
@@ -180,6 +183,7 @@ class OverlaySettings {
       miniX: prefs.getDouble('overlay_mini_x') ?? 0,
       miniY: prefs.getDouble('overlay_mini_y') ?? 100,
       isMinimized: prefs.getBool('overlay_minimized') ?? false,
+      showProfession: prefs.getBool('overlay_show_profession') ?? true,
     );
   }
 
@@ -194,6 +198,7 @@ class OverlaySettings {
     await prefs.setDouble('overlay_mini_x', miniX);
     await prefs.setDouble('overlay_mini_y', miniY);
     await prefs.setBool('overlay_minimized', isMinimized);
+    await prefs.setBool('overlay_show_profession', showProfession);
   }
 
   Future<void> savePosition(bool minimized) async {
@@ -226,5 +231,10 @@ class OverlaySettings {
   Future<void> saveMinimizedState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('overlay_minimized', isMinimized);
+  }
+
+  Future<void> saveProfessionVisibility() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('overlay_show_profession', showProfession);
   }
 }
