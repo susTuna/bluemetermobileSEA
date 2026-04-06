@@ -21,12 +21,16 @@ class HuntMob {
   });
 
   factory HuntMob.fromJson(Map<String, dynamic> json) {
+    final mapName =
+        json['expand']?['map']?['name'] as String? ??
+        json['map'] as String? ??
+        '';
     return HuntMob(
       id: json['id'] as String,
       monsterId: json['monster_id'] as int,
       name: json['name'] as String,
       type: json['type'] as String,
-      map: json['map'] as String? ?? '',
+      map: mapName,
       respawnTime: json['respawn_time'] as int? ?? 0,
       location: json['location'] as bool? ?? false,
       uid: json['uid'] as int? ?? 0,
@@ -45,6 +49,7 @@ class MobChannelStatus {
   int lastHp;
   DateTime lastUpdate;
   final String region;
+  String? location;
 
   MobChannelStatus({
     required this.id,
@@ -53,16 +58,25 @@ class MobChannelStatus {
     required this.lastHp,
     required this.lastUpdate,
     required this.region,
+    this.location,
   });
 
   factory MobChannelStatus.fromJson(Map<String, dynamic> json) {
+    final rawUpdate = json['last_update'] ?? json['update'] ?? json['updated'];
+    final updateStr = rawUpdate?.toString() ?? '';
+
     return MobChannelStatus(
-      id: json['id'] as String,
-      mobId: json['mob'] as String,
-      channelNumber: json['channel_number'] as int,
-      lastHp: json['last_hp'] as int? ?? 0,
-      lastUpdate: DateTime.tryParse(json['last_update'] as String? ?? '') ?? DateTime.now(),
-      region: json['region'] as String? ?? 'SEA',
+      id: json['id']?.toString() ?? '',
+      mobId: json['mob']?.toString() ?? '',
+      channelNumber: json['channel_number'] is int 
+          ? json['channel_number'] 
+          : int.tryParse(json['channel_number']?.toString() ?? '0') ?? 0,
+      lastHp: json['last_hp'] is int 
+          ? json['last_hp'] 
+          : int.tryParse(json['last_hp']?.toString() ?? '0') ?? 0,
+      lastUpdate: DateTime.tryParse(updateStr) ?? DateTime.now(),
+      region: json['region']?.toString() ?? 'SEA',
+      location: json['location_image']?.toString(),
     );
   }
 }

@@ -93,7 +93,9 @@ class BPTimerService extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/collections/mobs/records?perPage=100'),
+        Uri.parse(
+          '$_baseUrl/collections/mobs/records?perPage=100&expand=map&sort=uid',
+        ),
       );
 
       if (response.statusCode == 200) {
@@ -167,46 +169,38 @@ class BPTimerService extends ChangeNotifier {
       return;
     }
 
-    // Throttle: compute 5% bucket (floor to nearest 5)
-    final int hpPctInt = hpPercent.ceil();
-    final int bucket = (hpPctInt ~/ 5) * 5;
+    // Throttle: compute 5% interval
+    final int hpPctInt = hpPercent.round();
+
+    if (hpPctInt % 5 != 0) return;
 
     // Create a unique key per monster instance + line
     final throttleKey = '${monsterId}_$line';
 
-    final lastBucket = _lastReportedBucket[throttleKey];
-    if (lastBucket != null && bucket >= lastBucket) {
-      // Haven't crossed to a lower 5% bucket yet, skip
+    final lastReportedHp = _lastReportedBucket[throttleKey];
+    if (lastReportedHp != null && lastReportedHp == hpPctInt) {
+      // Alr reported on this line
       return;
     }
 
-    // Update the last reported bucket
-    _lastReportedBucket[throttleKey] = bucket;
+    // Update memory and send
+    _lastReportedBucket[throttleKey] = hpPctInt;
 
-    // Send the report (fire and forget, ignore 200/403)
+    // Send the report
     try {
       await http.post(
         Uri.parse('$_baseUrl/create-hp-report'),
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Api-Key': _apiKey,
-        },
-        body:
-            {
-                  'monster_id': monsterId,
-                  'hp_pct': bucket, // On arrondi
-                  'line': line,
-                  'pos_x': posX,
-                  'pos_y': posY,
-                  'pos_z': posZ,
-                  'account_id': accountId,
-                  'uid': playerUid.toString(),
-                }.entries
-                .map(
-                  (e) =>
-                      '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}',
-                )
-                .join('&'),
+        headers: {'Content-Type': 'application/json', 'X-API-Key': _apiKey},
+        body: json.encode({
+          'monster_id': monsterId,
+          'hp_pct': hpPctInt,
+          'line': line,
+          'pos_x': posX,
+          'pos_y': posY,
+          'pos_z': posZ,
+          'account_id': accountId,
+          'uid': playerUid.toInt(),
+        }),
       );
       // debugPrint('BPTimer: $throttleKey  hpPctInt: $hpPctInt, HP $hpPercent% (bucket $bucket), last bucket: ${_lastReportedBucket[throttleKey]} - pos: ($posX, $posY, $posZ)');
       // debugPrint('BPTimer rep: ${rep.statusCode} ${rep.body}');
@@ -312,6 +306,9 @@ class BPTimerService extends ChangeNotifier {
                 } else if (currentEvent == 'mob_hp_updates_sea' &&
                     currentData != null) {
                   _handleHpUpdate(currentData!);
+                } else if (currentEvent == 'mob_resets_sea' &&
+                    currentData != null) {
+                  _handleMobResets(currentData!);
                 }
               }
             },
@@ -351,17 +348,18 @@ class BPTimerService extends ChangeNotifier {
       debugPrint('SSE connected with clientId: $clientId');
 
       // Subscribe to mob_hp_updates_sea via POST /api/realtime
+      final subscriptions = ['mob_hp_updates_sea', 'mob_resets_sea'];
       final response = await http.post(
         Uri.parse('$_baseUrl/realtime'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'clientId': clientId,
-          'subscriptions': ['mob_hp_updates_sea'],
+          'subscriptions': subscriptions,
         }),
       );
 
       if (response.statusCode == 204 || response.statusCode == 200) {
-        debugPrint('Subscribed to mob_hp_updates_sea');
+        debugPrint('Subscribed to $subscriptions');
         _isConnected = true;
       } else {
         debugPrint(
@@ -403,9 +401,14 @@ class BPTimerService extends ChangeNotifier {
       for (final update in updates) {
         if (update is! List || update.length < 3) continue;
 
-        final mobId = update[0] as String;
-        final channelNumber = update[1] as int;
-        final hp = update[2] as int;
+        final mobId = update[0].toString();
+        final channelNumber = update[1] is int 
+            ? update[1] 
+            : int.tryParse(update[1].toString()) ?? 0;
+        final hp = update[2] is int 
+            ? update[2] 
+            : int.tryParse(update[2].toString()) ?? 0;
+        final location = update.length > 3 ? update[3]?.toString() : null;
 
         // Find existing channel status and update it
         final statuses = _channelStatuses.putIfAbsent(mobId, () => []);
@@ -416,6 +419,7 @@ class BPTimerService extends ChangeNotifier {
         if (existingIndex >= 0) {
           statuses[existingIndex].lastHp = hp;
           statuses[existingIndex].lastUpdate = DateTime.now();
+          statuses[existingIndex].location = location;
         } else {
           // Create new channel status entry
           statuses.add(
@@ -426,6 +430,7 @@ class BPTimerService extends ChangeNotifier {
               lastHp: hp,
               lastUpdate: DateTime.now(),
               region: _region,
+              location: location,
             ),
           );
         }
@@ -437,6 +442,30 @@ class BPTimerService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error handling HP update: $e');
+    }
+  }
+
+  void _handleMobResets(String dataStr) {
+    try {
+      final resets = json.decode(dataStr) as List;
+      bool changed = false;
+
+      for (final mobId in resets) {
+        final statuses = _channelStatuses[mobId];
+        if (statuses != null) {
+          for (var status in statuses) {
+            status.lastHp = 100;
+            status.lastUpdate = DateTime.now();
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error handling mob reset: $e');
     }
   }
 
