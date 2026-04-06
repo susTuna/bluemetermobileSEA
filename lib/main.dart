@@ -1550,7 +1550,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('bluemeterseaSEA Mobile')),
+      appBar: AppBar(title: const Text('BlueMeterSEA Mobile')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

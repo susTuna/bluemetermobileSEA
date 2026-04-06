@@ -348,7 +348,10 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
       addStat('Lv', info.level, const Color(0xFF64B5F6));
     }
     if (info.combatPower != null && info.combatPower! > 0) {
-      addStat('CP', info.combatPower, const Color(0xFFFFD54F));
+      addStat('AS', info.combatPower, const Color(0xFFFFD54F));
+    }
+    if (info.seasonStrength != null && info.seasonStrength! >0) {
+      addStat('IS', info.seasonStrength, const Color(0xFFFFCC80));
     }
     addStat('ATK', info.attack, const Color(0xFFFF8A65));
     addStat('DEF', info.defense, const Color(0xFF90CAF9));
@@ -357,7 +360,6 @@ class _PlayerDetailCardState extends State<PlayerDetailCard> with SingleTickerPr
     addStat('Haste', info.haste, const Color(0xFF80DEEA), pct: info.hastePct);
     addStat('Mast', info.mastery, const Color(0xFFCE93D8), pct: info.masteryPct);
     addStat('Vers', info.versatility, const Color(0xFFA5D6A7), pct: info.versatilityPct);
-    addStat('SSt', info.seasonStrength, const Color(0xFFFFCC80));
 
     return labels;
   }

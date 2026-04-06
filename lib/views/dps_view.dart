@@ -33,7 +33,7 @@ class _DpsViewState extends State<DpsView> with SingleTickerProviderStateMixin {
       }
     });
   }
-  
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -91,9 +91,21 @@ class _DpsViewState extends State<DpsView> with SingleTickerProviderStateMixin {
           child: TabBarView(
             controller: _tabController,
             children: [
-              _PlayerList(players: widget.players, metricType: "dps", onSelectPlayer: widget.onSelectPlayer),
-              _PlayerList(players: widget.players, metricType: "taken", onSelectPlayer: widget.onSelectPlayer),
-              _PlayerList(players: widget.players, metricType: "heal", onSelectPlayer: widget.onSelectPlayer),
+              _PlayerList(
+                players: widget.players,
+                metricType: "dps",
+                onSelectPlayer: widget.onSelectPlayer,
+              ),
+              _PlayerList(
+                players: widget.players,
+                metricType: "taken",
+                onSelectPlayer: widget.onSelectPlayer,
+              ),
+              _PlayerList(
+                players: widget.players,
+                metricType: "heal",
+                onSelectPlayer: widget.onSelectPlayer,
+              ),
             ],
           ),
         ),
@@ -137,17 +149,17 @@ class _PlayerListState extends State<_PlayerList> {
   Color _getClassColor(Classes cls) {
     switch (cls) {
       case Classes.stormblade:
-        return Colors.blueAccent;
-      case Classes.frostMage:
         return Colors.purpleAccent;
+      case Classes.frostMage:
+        return Colors.lightBlueAccent;
       case Classes.windKnight:
         return Colors.greenAccent;
       case Classes.verdantOracle:
         return Colors.lightGreenAccent;
       case Classes.heavyGuardian:
-        return Colors.orangeAccent;
+        return Colors.green.shade500;
       case Classes.marksman:
-        return Colors.yellowAccent;
+        return Colors.amberAccent;
       case Classes.shieldKnight:
         return Colors.indigoAccent;
       case Classes.soulMusician:
@@ -157,7 +169,13 @@ class _PlayerListState extends State<_PlayerList> {
     }
   }
 
-  Widget _buildRow(Map<String, dynamic> p, int index, double maxVal, String rateKey, String totalKey) {
+  Widget _buildRow(
+    Map<String, dynamic> p,
+    int index,
+    double maxVal,
+    String rateKey,
+    String totalKey,
+  ) {
     final cls = Classes.fromId(p['classId']);
     final val = (p[rateKey] as num?)?.toDouble() ?? 0.0;
     final total = (p[totalKey] as num?)?.toInt() ?? 0;
@@ -169,12 +187,16 @@ class _PlayerListState extends State<_PlayerList> {
       name = "Moi";
     }
 
+    String profession = cls.name;
+    String combatPower = p['combatPower']?.toString() ?? "0";
+    String seasonStrength = p['seasonStrength']?.toString() ?? "0";
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
         final uidStr = p['uid'] as String?;
         if (uidStr != null && uidStr.isNotEmpty) {
-           widget.onSelectPlayer(uidStr);
+          widget.onSelectPlayer(uidStr);
         }
       },
       child: Container(
@@ -209,13 +231,14 @@ class _PlayerListState extends State<_PlayerList> {
                       cls.iconPath,
                       width: 12,
                       height: 12,
-                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
                     ),
                     const SizedBox(width: 4),
                   ],
                   Expanded(
                     child: Text(
-                      name,
+                      '$name-$profession ($combatPower+$seasonStrength)',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w500,
@@ -261,7 +284,10 @@ class _PlayerListState extends State<_PlayerList> {
 
     if (filtered.isEmpty) {
       return Center(
-        child: Text(TranslationService().translate('NoData'), style: const TextStyle(color: Colors.white54, fontSize: 10)),
+        child: Text(
+          TranslationService().translate('NoData'),
+          style: const TextStyle(color: Colors.white54, fontSize: 10),
+        ),
       );
     }
 
@@ -290,7 +316,13 @@ class _PlayerListState extends State<_PlayerList> {
               itemExtent: 18.0,
               padding: EdgeInsets.zero,
               itemBuilder: (context, index) {
-                return _buildRow(filtered[index], index, maxVal, rateKey, totalKey);
+                return _buildRow(
+                  filtered[index],
+                  index,
+                  maxVal,
+                  rateKey,
+                  totalKey,
+                );
               },
             ),
             if (myIndex != -1)
@@ -298,19 +330,27 @@ class _PlayerListState extends State<_PlayerList> {
                 animation: _scrollController,
                 builder: (context, child) {
                   final double itemTop = myIndex * 18.0;
-                  final double scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+                  final double scrollOffset = _scrollController.hasClients
+                      ? _scrollController.offset
+                      : 0.0;
                   final double viewportHeight = constraints.maxHeight;
-                  
+
                   if (itemTop > scrollOffset + viewportHeight - 18.0) {
-                     return Positioned(
-                       bottom: 0,
-                       left: 0,
-                       right: 0,
-                       child: Container(
-                         color: Colors.black.withValues(alpha: 0.8),
-                         child: _buildRow(filtered[myIndex], myIndex, maxVal, rateKey, totalKey),
-                       ),
-                     );
+                    return Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.8),
+                        child: _buildRow(
+                          filtered[myIndex],
+                          myIndex,
+                          maxVal,
+                          rateKey,
+                          totalKey,
+                        ),
+                      ),
+                    );
                   }
                   return const SizedBox.shrink();
                 },

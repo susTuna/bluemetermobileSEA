@@ -19,7 +19,7 @@ enum AttrType {
   attrMasteryPct(0x2BAC),
   attrVersatility(0x2BB6),
   attrVersatilityPct(0x2BC0),
-  attrSeasonStrength(12690),
+  attrSeasonStrength(11440),
   // Total variants - game may send these instead of base
   attrCriTotal(11111),
   attrLuckyTotal(11131),
@@ -31,7 +31,7 @@ enum AttrType {
   attrHastePctTotal(11931),
   attrMasteryPctTotal(11941),
   attrVersatilityPctTotal(11951),
-  attrSeasonStrengthTotal(12691),
+  attrSeasonStrengthTotal(11440),
   attrHp(0x2C2E),
   attrMaxHp(0x2C38),
   attrElementFlag(0x646D6C),
