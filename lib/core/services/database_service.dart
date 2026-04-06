@@ -76,6 +76,8 @@ class DatabaseService {
           updateValues['professionId'] = player.professionId;
         if (player.combatPower != null && player.combatPower != 0)
           updateValues['combatPower'] = player.combatPower;
+        if (player.seasonStrength != null && player.seasonStrength != 0)
+          updateValues['seasonStrength'] = player.seasonStrength;
         if (player.level != null && player.level != 0)
           updateValues['level'] = player.level;
         if (player.rankLevel != null && player.rankLevel != 0)
@@ -122,6 +124,7 @@ class DatabaseService {
       name: map['name'] as String?,
       professionId: map['professionId'] as int?,
       combatPower: map['combatPower'] as int?,
+      seasonStrength: map['seasonStrength'] as int?,
       level: map['level'] as int?,
       rankLevel: map['rankLevel'] as int?,
       critical: map['critical'] as int?,

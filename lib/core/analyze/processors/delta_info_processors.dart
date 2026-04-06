@@ -135,8 +135,9 @@ abstract class BaseDeltaInfoProcessor implements IMessageProcessor {
                 if (isTargetPlayer) _storage.setPlayerVersatilityPct(targetUuid, reader.readInt32());
                 break;
               case AttrType.attrSeasonStrength:
-              case AttrType.attrSeasonStrengthTotal:
                 if (isTargetPlayer) _storage.setPlayerSeasonStrength(targetUuid, reader.readInt32());
+                break;
+              case AttrType.attrSeasonStrengthTotal:
                 break;
               case AttrType.attrHp:
                 hpUpdated = true;

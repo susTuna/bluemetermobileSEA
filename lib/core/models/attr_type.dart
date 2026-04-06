@@ -31,7 +31,7 @@ enum AttrType {
   attrHastePctTotal(11931),
   attrMasteryPctTotal(11941),
   attrVersatilityPctTotal(11951),
-  attrSeasonStrengthTotal(11440),
+  attrSeasonStrengthTotal(11441),
   attrHp(0x2C2E),
   attrMaxHp(0x2C38),
   attrElementFlag(0x646D6C),
