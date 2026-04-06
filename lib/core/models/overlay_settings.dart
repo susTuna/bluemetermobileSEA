@@ -23,7 +23,7 @@ class OverlayAnchor {
 // Easily editable predefined anchors
 const List<OverlayAnchor> kOverlayAnchors = [
   OverlayAnchor(
-    name: 'Gauche',
+    name: 'Left',
     icon: Icons.align_horizontal_left,
     xPercent: 0.0,
     yPercent: 28.0,
@@ -31,7 +31,7 @@ const List<OverlayAnchor> kOverlayAnchors = [
     hPercent: 26.0,
   ),
   OverlayAnchor(
-    name: 'Droite',
+    name: 'Right',
     icon: Icons.align_horizontal_right,
     xPercent: 73.0, // 100% - 20% width - 5% margin
     yPercent: 10.0,
@@ -39,7 +39,7 @@ const List<OverlayAnchor> kOverlayAnchors = [
     hPercent: 26.0,
   ),
   OverlayAnchor(
-    name: 'Haut',
+    name: 'Top',
     icon: Icons.align_vertical_top,
     xPercent: 20.0,
     yPercent: 0.0,
