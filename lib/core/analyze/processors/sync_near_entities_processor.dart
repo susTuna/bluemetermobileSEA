@@ -191,6 +191,9 @@ class SyncNearEntitiesProcessor implements IMessageProcessor {
           case AttrType.attrFightPoint:
             _storage.setPlayerCombatPower(playerUid, reader.readInt32());
             break;
+          case AttrType.attrSeasonStrength:
+            _storage.setPlayerSeasonStrength(playerUid, reader.readInt32());
+            break;
           case AttrType.attrLevel:
             _storage.setPlayerLevel(playerUid, reader.readInt32());
             break;
