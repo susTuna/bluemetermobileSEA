@@ -10,7 +10,7 @@
 
 ## Quick Links
 
-- [Latest Release](https://github.com/sustuna/bluemeterseamobilesea/releases/latest)
+- [Latest Release](https://github.com/sustuna/bluemetermobilesea/releases/latest)
 
 ---
 
@@ -41,20 +41,13 @@ The app provides real-time combat information through an Android floating overla
 
 ### Installation
 
-1. Clone the repository and open the Flutter project.
-2. Create a file dart_defines.json with : {"BPTIMER_API_KEY": "xxxxxxxxxxxx"} (Ask to bptimer for a key)
-3. Build the APK:
-
-```bash
-flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-define-from-file=dart_defines.json
-```
-
-4. Install the APK on your Android device.
-5. Allow the "display over other apps" permission.
+1. Download APK from release.
+2. Install the APK on your Android device.
+3. Allow the "display over other apps" permission.
 
 ### Usage
 
-- Start the game, then launch bluemetersea.
+- Start the game, then launch BlueMeterSEA Mobile.
 - Ensure overlay permission is granted.
 - Use the reset button whenever needed.
 
@@ -78,6 +71,6 @@ flutter build apk --release --split-debug-info=./debug_info --obfuscate --dart-d
 
 ### Acknowledgements
 
-- Thanks to the PC bluemetersea project: https://github.com/caaatto/bluemetersea
+- Thanks to the PC BlueMeter project: https://github.com/caaatto/bluemeter
 - Thanks to **bptimer.com** for HP-by-line data used in the app: https://bptimer.com
-- Thanks to the Mobile bluemetersea project: https://github.com/jbourny/bluemeterseamobile
+- Thanks to the Mobile BlueMeter project: https://github.com/jbourny/bluemetermobile
