@@ -2,7 +2,7 @@
 library monster_names;
 
 // AUTO-GENERATED FILE. DO NOT EDIT DIRECTLY.
-// Generated from mined JSON data.
+// Generated from ZDPS Json Data.
 
 const Map<int, String> monsterNames = {
   101: 'Dummy (Flame Orc)',

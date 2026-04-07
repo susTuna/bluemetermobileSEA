@@ -74,3 +74,4 @@ The app provides real-time combat information through an Android floating overla
 - Thanks to the PC BlueMeter project: https://github.com/caaatto/bluemeter
 - Thanks to **bptimer.com** for HP-by-line data used in the app: https://bptimer.com
 - Thanks to the Mobile BlueMeter project: https://github.com/jbourny/bluemetermobile
+- Thanks to the ZDPS project: https://github.com/Blue-Protocol-Source/BPSR-ZDPS

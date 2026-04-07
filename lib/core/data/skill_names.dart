@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE. DO NOT EDIT DIRECTLY.
-// Generated from mined JSON data.
+// Generated from ZDPS Json Data.
 
 library skill_names;
 
